@@ -1,0 +1,15 @@
+# Repo-side governance layout version declaration.
+# Describes which governance component versions are deliberately adopted here.
+
+schema_version: "1.0"
+last_updated: "2026-09-21"
+governance_version: "0.4.0"
+
+# Target-framework installation dependency, not proof of runtime execution.
+default_self_smoke_contract_dependency: required
+
+contract_schema_version: "1.2.0"
+runtime_entrypoint_version: "1.1.0"
+hook_wiring_version: "1.0.0"
+artifact_layout_version: "1.0.0"
+memory_layout_version: "1.0.0"
