@@ -94,10 +94,9 @@ fu_amd_afc_parse_blob(FuAmdAfcState *self, const guint8 *buf, gsize bufsz, GErro
 	g_ptr_array_set_size(self->strings, 0);
 	g_ptr_array_set_size(self->forms, 0);
 	g_ptr_array_set_size(self->varstores, 0);
-	g_free(self->formset_name);
-	self->formset_name = NULL;
-	g_free(self->language);
-	self->language = NULL;
+	g_set_str(&self->formset_name, NULL);
+	g_set_str(&self->language, NULL);
+
 	/* the varstore section has no package header of its own, so its extent has
 	 * to be bounded here; the string and forms packages are self-describing and
 	 * clamp themselves to their package length */
@@ -111,14 +110,16 @@ fu_amd_afc_parse_blob(FuAmdAfcState *self, const guint8 *buf, gsize bufsz, GErro
 						  length,
 						  FU_STRUCT_AMD_AFC_EIE_HEADER_SIZE +
 						      strings_offset,
-						  error) ||
-	    !fu_amd_afc_hii_parse_varstores(self,
+						  error))
+		return FALSE;
+	if (!fu_amd_afc_hii_parse_varstores(self,
 					    buf,
 					    FU_STRUCT_AMD_AFC_EIE_HEADER_SIZE + varstores_offset +
 						varstores_size,
 					    FU_STRUCT_AMD_AFC_EIE_HEADER_SIZE + varstores_offset,
-					    error) ||
-	    !fu_amd_afc_hii_parse_forms(self,
+					    error))
+		return FALSE;
+	if (!fu_amd_afc_hii_parse_forms(self,
 					buf,
 					length,
 					FU_STRUCT_AMD_AFC_EIE_HEADER_SIZE + forms_offset,
@@ -644,10 +645,22 @@ fu_amd_afc_state_fuzzer_test_input(FuFuzzer *fuzzer, GBytes *blob, GError **erro
 	return TRUE;
 }
 
+static GBytes *
+fu_amd_afc_state_fuzzer_build_example(FuFuzzer *fuzzer, GBytes *blob, GError **error)
+{
+	g_autoptr(FuFirmware) fw = NULL;
+	g_type_ensure(FU_TYPE_FIRMWARE);
+	fw = fu_firmware_new_from_xml(g_bytes_get_data(blob, NULL), error);
+	if (fw == NULL)
+		return NULL;
+	return fu_firmware_write(fw, error);
+}
+
 static void
 fu_amd_afc_state_fuzzer_iface_init(FuFuzzerInterface *iface)
 {
 	iface->test_input = fu_amd_afc_state_fuzzer_test_input;
+	iface->build_example = fu_amd_afc_state_fuzzer_build_example;
 }
 
 FuAmdAfcState *
