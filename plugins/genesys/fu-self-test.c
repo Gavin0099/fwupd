@@ -165,6 +165,10 @@ fu_genesys_usbhub_device_p40_quirk_activation_func(void)
 		    fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT),
 		    ==,
 		    i == 0);
+		/* every P40 hub leaves isp mode before it is reset */
+		g_assert_true(
+		    fu_device_has_private_flag(device,
+					       FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET));
 		g_assert_cmpuint(fu_device_get_specialized_gtype(device),
 				 ==,
 				 FU_TYPE_GENESYS_USBHUB_DEVICE);
@@ -179,6 +183,9 @@ fu_genesys_usbhub_device_p40_quirk_activation_func(void)
 					       FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK));
 		g_assert_false(
 		    fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT));
+		g_assert_false(
+		    fu_device_has_private_flag(device,
+					       FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET));
 		g_assert_cmpuint(fu_device_get_specialized_gtype(device), ==, G_TYPE_INVALID);
 	}
 }
