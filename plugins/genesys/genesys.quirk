@@ -8,7 +8,38 @@ GType = FuGenesysUsbhubDevice
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
 
+# Lenovo P40WD-40 Hub compatibility policy
+# 1151 (GL3525-10) rejects Genesys vendor requests on the USB control pipe and only
+# answers through its HID, so its flash setup is finished once the HID proxy is bound
+[USB\VID_17EF&PID_1151]
+Plugin = genesys
+GType = FuGenesysUsbhubDevice
+Flags = p40-strict-project-check,hid-transport
+
+[USB\VID_17EF&PID_1153]
+Plugin = genesys
+GType = FuGenesysUsbhubDevice
+Flags = p40-strict-project-check
+
+[USB\VID_17EF&PID_1155]
+Plugin = genesys
+GType = FuGenesysUsbhubDevice
+Flags = p40-strict-project-check
+
 # Genesys Logic USB Hubs' HID
+
+# Lenovo P40WD-40: the GLI HID of each hub (L1 f00f, L2 4c41, L3 4c42)
+[USB\VID_17EF&PID_F00F]
+Plugin = genesys
+GType = FuGenesysHubhidDevice
+
+[USB\VID_17EF&PID_4C41]
+Plugin = genesys
+GType = FuGenesysHubhidDevice
+
+[USB\VID_17EF&PID_4C42]
+Plugin = genesys
+GType = FuGenesysHubhidDevice
 
 [USB\VID_05E3&PID_0102]
 Plugin = genesys
