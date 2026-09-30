@@ -1370,6 +1370,14 @@ fu_genesys_usbhub_device_attach(FuDevice *device, FuProgress *progress, GError *
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
 	FuDevice *proxy;
 
+	/* the reset below must still happen if leaving ISP mode fails */
+	if (fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET)) {
+		g_autoptr(GError) error_local = NULL;
+		if (!fu_genesys_usbhub_device_set_isp_mode(self, ISP_EXIT, &error_local)) {
+			g_warning("ignoring failure to leave isp mode: %s", error_local->message);
+		}
+	}
+
 	if (!fu_genesys_usbhub_device_reset(self, error))
 		return FALSE;
 
@@ -3444,4 +3452,5 @@ fu_genesys_usbhub_device_class_init(FuGenesysUsbhubDeviceClass *klass)
 	fu_device_register_private_flag(device_class,
 					FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK);
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT);
+	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET);
 }

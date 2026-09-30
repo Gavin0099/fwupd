@@ -11,6 +11,7 @@
 #define FU_TYPE_GENESYS_USBHUB_DEVICE			(fu_genesys_usbhub_device_get_type())
 #define FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK "p40-strict-project-check"
 #define FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT		"hid-transport"
+#define FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET	"exit-isp-before-reset"
 G_DECLARE_FINAL_TYPE(FuGenesysUsbhubDevice,
 		     fu_genesys_usbhub_device,
 		     FU,
