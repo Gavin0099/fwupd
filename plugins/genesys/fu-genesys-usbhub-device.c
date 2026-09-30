@@ -98,7 +98,8 @@ struct _FuGenesysUsbhubDevice {
 	FuGenesysFwStatus running_bank;
 	guint8 bonding;
 
-	gboolean is_gl352350; /* model with unique codesign mechanism */
+	gboolean is_gl352350;	      /* model with unique codesign mechanism */
+	gboolean flash_setup_pending; /* hid-transport hub waiting for its HID proxy */
 
 	FuCfiDevice *cfi_device;
 	guint32 flash_erase_delay;
@@ -1385,9 +1386,19 @@ static GBytes *
 fu_genesys_usbhub_device_dump_firmware(FuDevice *device, FuProgress *progress, GError **error)
 {
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
-	gsize size = fu_cfi_device_get_size(self->cfi_device);
+	gsize size;
 	g_autoptr(FuDeviceLocker) locker = NULL;
 	g_autofree guint8 *buf = NULL;
+
+	/* a hid-transport hub has no flash info until its late setup has finished */
+	if (self->cfi_device == NULL) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "flash setup has not finished");
+		return NULL;
+	}
+	size = fu_cfi_device_get_size(self->cfi_device);
 
 	/* progress */
 	fu_progress_set_id(progress, G_STRLOC);
@@ -1445,12 +1456,64 @@ fu_genesys_usbhub_device_probe(FuDevice *device, GError **error)
 	return TRUE;
 }
 
+/* the part of setup that sends vendor commands: over USB control, or over the HID proxy when set */
+static gboolean
+fu_genesys_usbhub_device_setup_flash(FuGenesysUsbhubDevice *self, GError **error)
+{
+	FuDevice *device = FU_DEVICE(self);
+	guint32 block_size;
+	guint32 sector_size;
+
+	/* enter isp mode */
+	if (!fu_genesys_usbhub_device_enter_isp_mode(self, error))
+		return FALSE;
+	/* setup cfi device */
+	self->cfi_device = fu_genesys_usbhub_device_cfi_setup(self, error);
+	if (self->cfi_device == NULL)
+		return FALSE;
+	block_size = fu_cfi_device_get_block_size(self->cfi_device);
+	if (block_size != 0)
+		self->flash_block_size = block_size;
+	sector_size = fu_cfi_device_get_sector_size(self->cfi_device);
+	if (sector_size != 0)
+		self->flash_sector_size = sector_size;
+
+	/* setup firmware parameters */
+	fu_device_set_firmware_size_max(
+	    device,
+	    MIN(self->spec.fw_data_max_count, fu_cfi_device_get_size(self->cfi_device)));
+
+	/* has codesign */
+	if (self->has_codesign) {
+		FuGenesysFwBank bank = FW_BANK_1;
+		switch (self->running_bank) {
+		case FU_GENESYS_FW_STATUS_BANK1:
+			bank = FW_BANK_1;
+			break;
+		case FU_GENESYS_FW_STATUS_BANK2:
+			bank = FW_BANK_2;
+			break;
+		default:
+			g_set_error_literal(error,
+					    FWUPD_ERROR,
+					    FWUPD_ERROR_NOT_SUPPORTED,
+					    "wrong setting in .quirk, "
+					    "mask code does not support codesign");
+			return FALSE;
+		}
+
+		if (!fu_genesys_usbhub_device_ensure_public_key(self, bank, error))
+			return FALSE;
+	}
+
+	/* success */
+	return TRUE;
+}
+
 static gboolean
 fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 {
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
-	guint32 block_size;
-	guint32 sector_size;
 	guint8 static_idx = 0;
 	guint8 dynamic_idx = 0;
 	const gsize bufsz = 0x20;
@@ -1606,46 +1669,24 @@ fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 	if (fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_HAS_PUBLIC_KEY))
 		self->has_codesign = TRUE;
 
-	/* enter isp mode */
-	if (!fu_genesys_usbhub_device_enter_isp_mode(self, error))
-		return FALSE;
-	/* setup cfi device */
-	self->cfi_device = fu_genesys_usbhub_device_cfi_setup(self, error);
-	if (self->cfi_device == NULL)
-		return FALSE;
-	block_size = fu_cfi_device_get_block_size(self->cfi_device);
-	if (block_size != 0)
-		self->flash_block_size = block_size;
-	sector_size = fu_cfi_device_get_sector_size(self->cfi_device);
-	if (sector_size != 0)
-		self->flash_sector_size = sector_size;
-
-	/* setup firmware parameters */
-	fu_device_set_firmware_size_max(
-	    device,
-	    MIN(self->spec.fw_data_max_count, fu_cfi_device_get_size(self->cfi_device)));
-
-	/* has codesign */
-	if (self->has_codesign) {
-		FuGenesysFwBank bank = FW_BANK_1;
-		switch (self->running_bank) {
-		case FU_GENESYS_FW_STATUS_BANK1:
-			bank = FW_BANK_1;
-			break;
-		case FU_GENESYS_FW_STATUS_BANK2:
-			bank = FW_BANK_2;
-			break;
-		default:
+	/*
+	 * hubs that only answer vendor commands through their HID (the USB control pipe stalls
+	 * them) finish the flash part of setup once the HID proxy is bound, see
+	 * fu_genesys_usbhub_device_setup_flash_late()
+	 */
+	if (fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT) &&
+	    fu_device_get_proxy(device, NULL) == NULL) {
+		if (self->has_codesign) {
 			g_set_error_literal(error,
 					    FWUPD_ERROR,
 					    FWUPD_ERROR_NOT_SUPPORTED,
-					    "wrong setting in .quirk, "
-					    "mask code does not support codesign");
+					    "hid-transport with codesign is not supported");
 			return FALSE;
 		}
-
-		if (!fu_genesys_usbhub_device_ensure_public_key(self, bank, error))
-			return FALSE;
+		self->flash_setup_pending = TRUE;
+		fu_device_remove_flag(device, FWUPD_DEVICE_FLAG_UPDATABLE);
+	} else if (!fu_genesys_usbhub_device_setup_flash(self, error)) {
+		return FALSE;
 	}
 
 	/* add specific product info */
@@ -1713,6 +1754,30 @@ fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 	return TRUE;
 }
 
+/* finish the flash part of setup through the HID proxy; called once the proxy is bound */
+gboolean
+fu_genesys_usbhub_device_setup_flash_late(FuGenesysUsbhubDevice *self, GError **error)
+{
+	g_autoptr(FuDeviceLocker) locker = NULL;
+
+	g_return_val_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self), FALSE);
+	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
+
+	if (!self->flash_setup_pending)
+		return TRUE;
+
+	/* USE_PROXY_FOR_OPEN makes this open the HID proxy as well */
+	locker = fu_device_locker_new(FU_DEVICE(self), error);
+	if (locker == NULL)
+		return FALSE;
+	if (!fu_genesys_usbhub_device_setup_flash(self, error))
+		return FALSE;
+
+	self->flash_setup_pending = FALSE;
+	fu_device_add_flag(FU_DEVICE(self), FWUPD_DEVICE_FLAG_UPDATABLE);
+	return TRUE;
+}
+
 static void
 fu_genesys_usbhub_device_codesign_to_string(FuGenesysUsbhubDevice *self, guint idt, GString *str)
 {
@@ -1757,6 +1822,7 @@ fu_genesys_usbhub_device_to_string(FuDevice *device, guint idt, GString *str)
 					      "FlashCapacity",
 					      fu_cfi_device_get_size(self->cfi_device));
 	}
+	fwupd_codec_string_append_bool(str, idt, "FlashSetupPending", self->flash_setup_pending);
 	fwupd_codec_string_append_int(str, idt_detail, "FlashEraseDelay", self->flash_erase_delay);
 	fwupd_codec_string_append_int(str, idt_detail, "FlashWriteDelay", self->flash_write_delay);
 	fwupd_codec_string_append_hex(str, idt_detail, "FlashBlockSize", self->flash_block_size);
@@ -2136,12 +2202,148 @@ fu_genesys_usbhub_device_adjust_fw_addr(FuGenesysUsbhubDevice *self,
 }
 
 static gboolean
+fu_genesys_usbhub_device_check_project_compatibility_internal(
+    gboolean strict,
+    GBytes *device_project,
+    const gchar *device_mask_project_ic_type,
+    GBytes *firmware_project,
+    const gchar *firmware_mask_project_ic_type,
+    GError **error)
+{
+	gsize device_project_sz = 0;
+	gsize firmware_project_sz = 0;
+
+	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
+	if (!strict)
+		return TRUE;
+
+	if (device_project == NULL) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "P40 device does not expose PROJECT data");
+		return FALSE;
+	}
+	if (firmware_project == NULL) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_INVALID_FILE,
+				    "P40 firmware does not contain PROJECT data");
+		return FALSE;
+	}
+	if (device_mask_project_ic_type == NULL || strlen(device_mask_project_ic_type) != 6) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "P40 device does not expose a valid mask IC type");
+		return FALSE;
+	}
+	if (firmware_mask_project_ic_type == NULL || strlen(firmware_mask_project_ic_type) != 6) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_INVALID_FILE,
+				    "P40 firmware does not contain a valid mask IC type");
+		return FALSE;
+	}
+	(void)g_bytes_get_data(device_project, &device_project_sz);
+	(void)g_bytes_get_data(firmware_project, &firmware_project_sz);
+	if (device_project_sz != GENESYS_USBHUB_PROJECT_TOOL_STRING_LENGTH) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_NOT_SUPPORTED,
+			    "P40 device PROJECT length is %" G_GSIZE_FORMAT ", expected %u",
+			    device_project_sz,
+			    (guint)GENESYS_USBHUB_PROJECT_TOOL_STRING_LENGTH);
+		return FALSE;
+	}
+	if (firmware_project_sz != GENESYS_USBHUB_PROJECT_TOOL_STRING_LENGTH) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_FILE,
+			    "P40 firmware PROJECT length is %" G_GSIZE_FORMAT ", expected %u",
+			    firmware_project_sz,
+			    (guint)GENESYS_USBHUB_PROJECT_TOOL_STRING_LENGTH);
+		return FALSE;
+	}
+	if (!g_bytes_equal(device_project, firmware_project)) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_INVALID_FILE,
+				    "P40 firmware PROJECT does not match device");
+		return FALSE;
+	}
+	if (g_strcmp0(device_mask_project_ic_type, firmware_mask_project_ic_type) != 0) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_FILE,
+			    "P40 firmware mask IC type %s does not match device %s",
+			    firmware_mask_project_ic_type,
+			    device_mask_project_ic_type);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+fu_genesys_usbhub_device_check_project_compatibility(gboolean strict,
+						     GBytes *device_project,
+						     const gchar *device_mask_project_ic_type,
+						     GBytes *firmware_project,
+						     const gchar *firmware_mask_project_ic_type,
+						     GError **error)
+{
+	return fu_genesys_usbhub_device_check_project_compatibility_internal(
+	    strict,
+	    device_project,
+	    device_mask_project_ic_type,
+	    firmware_project,
+	    firmware_mask_project_ic_type,
+	    error);
+}
+
+static gboolean
 fu_genesys_usbhub_device_check_firmware(FuDevice *device,
 					FuFirmware *firmware,
 					FuFirmwareParseFlags flags,
 					GError **error)
 {
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
+	gboolean p40_strict =
+	    fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK);
+	g_autoptr(GBytes) device_project = NULL;
+	g_autoptr(GBytes) firmware_project = NULL;
+	g_autofree gchar *device_mask_project_ic_type = NULL;
+	g_autofree gchar *firmware_mask_project_ic_type = NULL;
+
+	if (p40_strict) {
+		if (!FU_IS_GENESYS_USBHUB_FIRMWARE(firmware)) {
+			g_set_error_literal(error,
+					    FWUPD_ERROR,
+					    FWUPD_ERROR_INVALID_FILE,
+					    "P40 policy requires Genesys USB hub firmware");
+			return FALSE;
+		}
+		if (self->st_project_ts != NULL)
+			device_project = g_bytes_new(self->st_project_ts->buf->data,
+						     self->st_project_ts->buf->len);
+		if (self->st_static_ts != NULL) {
+			device_mask_project_ic_type =
+			    fu_struct_genesys_ts_static_get_mask_project_ic_type(
+				self->st_static_ts);
+		}
+		firmware_project = fu_genesys_usbhub_firmware_get_project_bytes(
+		    FU_GENESYS_USBHUB_FIRMWARE(firmware));
+		firmware_mask_project_ic_type = fu_genesys_usbhub_firmware_get_mask_project_ic_type(
+		    FU_GENESYS_USBHUB_FIRMWARE(firmware));
+	}
+	if (!fu_genesys_usbhub_device_check_project_compatibility(p40_strict,
+								  device_project,
+								  device_mask_project_ic_type,
+								  firmware_project,
+								  firmware_mask_project_ic_type,
+								  error))
+		return FALSE;
 
 	/* has codesign */
 	if (self->has_codesign) {
@@ -3239,4 +3441,7 @@ fu_genesys_usbhub_device_class_init(FuGenesysUsbhubDeviceClass *klass)
 	device_class->set_quirk_kv = fu_genesys_usbhub_device_set_quirk_kv;
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HAS_MSTAR_SCALER);
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HAS_PUBLIC_KEY);
+	fu_device_register_private_flag(device_class,
+					FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK);
+	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT);
 }
