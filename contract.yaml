@@ -12,4 +12,7 @@ ai_behavior_override:
   - AGENTS.base.md
 rule_roots:
   - governance/rules
+evidence_roots:
+  - artifacts
+  - memory/evidence
 validators:
