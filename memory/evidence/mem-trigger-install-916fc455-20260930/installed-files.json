@@ -1,0 +1,24 @@
+{
+  "delivery_commit": "916fc455f239e1e12922057e36982e6b93431b42",
+  "files": {
+    ".governance/check-fwupd-container-prereq.ps1": {
+      "sha256": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380",
+      "previously_absent": true,
+      "bytes": 3157
+    },
+    ".codex/memory-obligation-contract.json": {
+      "sha256": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+      "previously_absent": true,
+      "bytes": 485
+    },
+    ".codex/hooks.json": {
+      "sha256": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+      "previously_absent": true,
+      "bytes": 26429
+    }
+  },
+  "installed": true,
+  "trusted": false,
+  "project_trust": true,
+  "source_draft": "C:\\Users\\reiko\\.codex\\worktrees\\mem-trigger-v5-delivery\\ai-governance-framework\\memory\\evidence\\fwupd-inactive-wiring-delivery-916fc455-20260930"
+}

@@ -1,0 +1,29 @@
+{
+  "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+  "version": null,
+  "layers": [
+    {
+      "name": {
+        "type": "user",
+        "file": "C:\\Users\\reiko\\.codex\\config.toml",
+        "profile": null
+      },
+      "version": "sha256:9207304be010d768ffe212121a9013e0ebbd1d390a9a9fc9683b685dae6e2238",
+      "configured_hook_events": []
+    },
+    {
+      "name": {
+        "type": "system",
+        "file": "C:\\ProgramData\\OpenAI\\Codex\\config.toml"
+      },
+      "version": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "configured_hook_events": []
+    }
+  ],
+  "project_trust_before": null,
+  "config_response_keys": [
+    "config",
+    "origins",
+    "layers"
+  ]
+}

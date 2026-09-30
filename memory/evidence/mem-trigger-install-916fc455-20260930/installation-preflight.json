@@ -1,0 +1,41 @@
+{
+  "result": "PASS",
+  "consumer_root": "E:\\BackUp\\Git_EE\\fwupd",
+  "consumer_head": "2a638885417b2dbd275eae7344886ff987761b7d",
+  "consumer_dirty_before": [
+    " M PLAN.md",
+    " M contract.yaml",
+    " M memory/01_active_task.md",
+    " M memory/04_review_log.md",
+    " M memory/2026-09-21.md",
+    " M plugins/genesys/fu-genesys-common.h",
+    " M plugins/genesys/fu-genesys-plugin.c",
+    " M plugins/genesys/fu-genesys-usbhub-device.c",
+    " M plugins/genesys/fu-genesys-usbhub-device.h",
+    " M plugins/genesys/fu-genesys-usbhub-firmware.c",
+    " M plugins/genesys/fu-genesys-usbhub-firmware.h",
+    " M plugins/genesys/genesys.quirk",
+    " M plugins/genesys/meson.build",
+    "?? artifacts/",
+    "?? memory/2026-09-22.md",
+    "?? memory/2026-09-23.md",
+    "?? memory/2026-09-24.md",
+    "?? memory/2026-09-29.md",
+    "?? memory/2026-09-30.md",
+    "?? memory/evidence/",
+    "?? plugins/genesys/fu-self-test.c"
+  ],
+  "framework_delivery_commit": "916fc455f239e1e12922057e36982e6b93431b42",
+  "source_pins_verified": true,
+  "interpreter_pins_verified": true,
+  "existing_effective_stop_count": 0,
+  "effective_inventory_source": "Codex hooks/list with config/read layers",
+  "preserved_hook_sources": {
+    "E:\\BackUp\\Git_EE\\fwupd\\.github\\hooks\\ai-governance-copilot.json": "CE3ED15EE6A09C1372D4CEBFDEAA742D2B037854BBADE8DCFE471906A13D5D93",
+    "E:\\BackUp\\Git_EE\\fwupd\\.github\\hooks\\ai-governance-vscode.json": "941647CF1C893396967B2F282FA7852DFA4313763FA29FC7663E06C0243E2EB8",
+    "E:\\BackUp\\Git_EE\\fwupd\\governance\\framework.lock.json": "2043642DE740EAA58A388A9EB564B568C219CD7641E3EE4A19FA79E5E0ABEE23",
+    "E:\\BackUp\\Git_EE\\ai-governance-framework\\.codex\\hooks.json": "951D70C5673459A23A785BF53CAE58B746C54468C6ABF24AD64D1EEA127070FC"
+  },
+  "submodule_head": "24ba84cb0dd374f241b6ba080015aef1d106a022",
+  "authority": "Owner authorized installation + exact-definition trust; no commit/push or production pilot in this slice"
+}

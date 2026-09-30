@@ -1,0 +1,31 @@
+{
+  "framework_delivery_commit": "916fc455f239e1e12922057e36982e6b93431b42",
+  "consumer_head": "2a638885417b2dbd275eae7344886ff987761b7d",
+  "source_sha256": {
+    "governance_tools/required_memory_bootstrap.py": "F191C081E03EFE216F651A44D4835B7AA07E245986FDECFEA41800FE3724D01E",
+    "governance_tools/required_memory_launcher.py": "39C90BDEFCAD06B9783077DD8BDD743CC12C628F87C6FF5F496CB08E918641ED",
+    "governance_tools/required_memory_obligation.py": "8FBB4A3DDC40A34ED5F3283C35C01BB34EB77862C3477672A4EABEC11900E6A2"
+  },
+  "installed_sha256": [
+    {
+      "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0",
+      "eventName": "postToolUse",
+      "enabled": true,
+      "source": "project",
+      "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+      "trustStatus": "trusted",
+      "currentHash": "sha256:fa3c499b487b6defd813a6a91bbf6d9126dca3240e0780cc53ff2f3bb347d999"
+    },
+    {
+      "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0",
+      "eventName": "stop",
+      "enabled": true,
+      "source": "project",
+      "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+      "trustStatus": "trusted",
+      "currentHash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272"
+    }
+  ],
+  "preserved_source_and_installed_generation": true,
+  "consumer_submodule_head": "24ba84cb0dd374f241b6ba080015aef1d106a022"
+}

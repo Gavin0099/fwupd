@@ -1,0 +1,13 @@
+{
+  "timestamp": 1790764971.2029924,
+  "files": {
+    "PLAN.md": {
+      "sha256": "1221E574E97BB1E8CEBF93E14793B0A80E6FC8C08A2C48C26A65D838ED60D7A6",
+      "bytes": 28525
+    },
+    "memory/01_active_task.md": {
+      "sha256": "30A6B03A742B3FAED44D0A2915B38B6F0955FBD5E20EFE5112779D654124D382",
+      "bytes": 14530
+    }
+  }
+}

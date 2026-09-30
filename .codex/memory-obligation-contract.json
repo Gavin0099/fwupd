@@ -1,0 +1,18 @@
+{
+  "event_id": "FWUPD-BUILD-DOCKER-001",
+  "dependency": "docker-engine",
+  "event_type": "required_dependency_blocked",
+  "event_status": "blocked",
+  "approved_producer": {
+    "path": ".governance/check-fwupd-container-prereq.ps1",
+    "sha256": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380",
+    "blocked_exit_code": 42
+  },
+  "plan_risk_headings": [
+    "Risk",
+    "Risks",
+    "Risk / blocker",
+    "Risks / Blockers",
+    "風險"
+  ]
+}

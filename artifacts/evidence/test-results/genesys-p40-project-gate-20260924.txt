@@ -1,0 +1,88 @@
+ninja: Entering directory `/tmp/fwupd-build-lf'
+ninja: no work to do.
+INFO: autodetecting backend as ninja
+INFO: calculating backend command to run: /usr/bin/ninja -C /tmp/fwupd-build-lf plugins/genesys/libfu_plugin_genesys.a src/fwupdtool libfwupdplugin/fwupdplugin-firmware-test plugins/genesys/genesys-self-test
+ninja: Entering directory `/tmp/fwupd-build-lf'
+ninja: no work to do.
+1/2 fwupd:fwupdplugin-firmware-test OK               0.04s
+2/2 fwupd:genesys-self-test         OK               0.04s
+
+Ok:                2   
+Fail:              0   
+
+Full log written to /tmp/fwupd-build-lf/meson-logs/testlog.txt
+09:59:41.118 FuEngine             originally started engine with coldplug,remotes,hwinfo,builtin-plugins,external-plugins,device-hotplug,history,path-store-defaults and now loading with readonly,builtin-plugins,external-plugins,path-store-defaults
+<firmware gtype="FuGenesysUsbhubFirmware">
+  <flags>has-checksum</flags>
+  <id>hub</id>
+  <version>80.0</version>
+  <version_raw>0x8000</version_raw>
+  <version_format>pair</version_format>
+  <alignment>0xa</alignment>
+  <size_max>0x1000000</size_max>
+  <data type="FuInputStream" size="0xb000" />
+  <image_gtypes>
+    <gtype>FuGenesysUsbhubDevFirmware</gtype>
+    <gtype>FuGenesysUsbhubPdFirmware</gtype>
+  </image_gtypes>
+  <tool_string_version>brand-project</tool_string_version>
+  <mask_project_code>7455</mask_project_code>
+  <mask_project_hardware>B</mask_project_hardware>
+  <mask_project_firmware>03</mask_project_firmware>
+  <mask_project_ic_type>352510</mask_project_ic_type>
+  <running_project_code>7455</running_project_code>
+  <running_project_hardware>B</running_project_hardware>
+  <running_project_firmware>03</running_project_firmware>
+  <running_project_ic_type>352510</running_project_ic_type>
+</firmware>
+
+09:59:41.170 FuEngine             originally started engine with coldplug,remotes,hwinfo,builtin-plugins,external-plugins,device-hotplug,history,path-store-defaults and now loading with readonly,builtin-plugins,external-plugins,path-store-defaults
+<firmware gtype="FuGenesysUsbhubFirmware">
+  <flags>has-checksum</flags>
+  <id>hub</id>
+  <version>81.0</version>
+  <version_raw>0x8100</version_raw>
+  <version_format>pair</version_format>
+  <alignment>0xa</alignment>
+  <size_max>0x1000000</size_max>
+  <data type="FuInputStream" size="0x7c00" />
+  <image_gtypes>
+    <gtype>FuGenesysUsbhubDevFirmware</gtype>
+    <gtype>FuGenesysUsbhubPdFirmware</gtype>
+  </image_gtypes>
+  <tool_string_version>brand-project</tool_string_version>
+  <mask_project_code>7466</mask_project_code>
+  <mask_project_hardware>B</mask_project_hardware>
+  <mask_project_firmware>03</mask_project_firmware>
+  <mask_project_ic_type>352350</mask_project_ic_type>
+  <running_project_code>7466</running_project_code>
+  <running_project_hardware>B</running_project_hardware>
+  <running_project_firmware>03</running_project_firmware>
+  <running_project_ic_type>352350</running_project_ic_type>
+</firmware>
+
+09:59:41.218 FuEngine             originally started engine with coldplug,remotes,hwinfo,builtin-plugins,external-plugins,device-hotplug,history,path-store-defaults and now loading with readonly,builtin-plugins,external-plugins,path-store-defaults
+<firmware gtype="FuGenesysUsbhubFirmware">
+  <flags>has-checksum</flags>
+  <id>hub</id>
+  <version>82.3</version>
+  <version_raw>0x8203</version_raw>
+  <version_format>pair</version_format>
+  <alignment>0xa</alignment>
+  <size_max>0x1000000</size_max>
+  <data type="FuInputStream" size="0x7c00" />
+  <image_gtypes>
+    <gtype>FuGenesysUsbhubDevFirmware</gtype>
+    <gtype>FuGenesysUsbhubPdFirmware</gtype>
+  </image_gtypes>
+  <tool_string_version>brand-project</tool_string_version>
+  <mask_project_code>7466</mask_project_code>
+  <mask_project_hardware>B</mask_project_hardware>
+  <mask_project_firmware>03</mask_project_firmware>
+  <mask_project_ic_type>352350</mask_project_ic_type>
+  <running_project_code>7466</running_project_code>
+  <running_project_hardware>B</running_project_hardware>
+  <running_project_firmware>03</running_project_firmware>
+  <running_project_ic_type>352350</running_project_ic_type>
+</firmware>
+

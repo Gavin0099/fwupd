@@ -1,0 +1,17 @@
+{
+  "id": "MEM-OBL-5E77875AE8C1ADE1",
+  "event_id": "FWUPD-BUILD-DOCKER-001",
+  "type": "blocker",
+  "status": "resolved",
+  "dependency": "docker-engine",
+  "source": "PostToolUse",
+  "session_id": "01a0f1da-cc0f-72e0-bf17-a61e483f6261",
+  "turn_id": "01a0f1da-ccae-7a51-876f-d89534764da0",
+  "tool_use_id": "exec-890f447b-2822-40f6-9ce7-86cfab18b3ad",
+  "command_sha256": "7a5c9c0f34fed34a29ce9e81cfd73fb495fbd629008d6d9eb4034a1f124433fd",
+  "verified_producer_sha256": "8e5dc0396e6b9d549d138cd7cc87b60692ef2c4cbde8833b176d2528d859b380",
+  "verified_output_sha256": "1c6eed6a0a1ce43814e48af5b4da2ceca4763fb1789342eea9f2ee4631b0669c",
+  "verified_by": "hook_recheck",
+  "observed_at": "2026-09-30T10:29:19.876630+00:00",
+  "resolved_at": "2026-09-30T10:32:45.913343+00:00"
+}

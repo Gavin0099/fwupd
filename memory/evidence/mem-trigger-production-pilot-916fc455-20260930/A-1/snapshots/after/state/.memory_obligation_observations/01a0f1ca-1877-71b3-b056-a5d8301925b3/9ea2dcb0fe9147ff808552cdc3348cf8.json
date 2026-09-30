@@ -1,0 +1,9 @@
+{
+  "session_id": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+  "turn_id": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+  "tool_use_id": "exec-d7fa5983-6811-4ab4-9f27-3f13c72ebc65",
+  "event_id": "FWUPD-BUILD-DOCKER-001",
+  "dependency": "docker-engine",
+  "status": "blocked",
+  "obligation_id": "MEM-OBL-7C719C7B8C40F717"
+}

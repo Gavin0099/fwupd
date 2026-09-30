@@ -1,0 +1,28 @@
+{
+  "request": {
+    "edits": [
+      {
+        "keyPath": "projects",
+        "value": {
+          "E:\\BackUp\\Git_EE\\fwupd": {
+            "trust_level": "trusted"
+          }
+        },
+        "mergeStrategy": "upsert"
+      }
+    ],
+    "filePath": "C:\\Users\\reiko\\.codex\\config.toml",
+    "expectedVersion": "sha256:9207304be010d768ffe212121a9013e0ebbd1d390a9a9fc9683b685dae6e2238",
+    "reloadUserConfig": false
+  },
+  "response": {
+    "status": "ok",
+    "version": "sha256:c2243e3ef336b993a18b54a77d3c1eba0b69260a94d1d95635eb1de43bd48599",
+    "filePath": "C:\\Users\\reiko\\.codex\\config.toml",
+    "overriddenMetadata": null
+  },
+  "previous_project_entry": null,
+  "project_key": "E:\\BackUp\\Git_EE\\fwupd",
+  "trusted": true,
+  "unrelated_config_values_unchanged": true
+}

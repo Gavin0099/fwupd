@@ -1,0 +1,107 @@
+{
+  "started_at": 1790765093.2331963,
+  "completed_at": 1790765093.710689,
+  "verdict": "PASS",
+  "checks": {
+    "two_hooks_before": true,
+    "zero_hooks_when_disabled": true,
+    "two_hooks_restored": true,
+    "exact_hook_hash_restored": true,
+    "trust_preserved": true,
+    "pending_evidence_unchanged": true,
+    "same_effective_definitions": true
+  },
+  "pending_evidence_before": {
+    "memory\\.pending_memory_obligations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\hook-audit.jsonl": "DE7E20D476AEF2765FC29BF0A4327BC358CB887CD10AB98D05504CFD6F487F6E",
+    "memory\\.pending_memory_obligations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\MEM-OBL-7C719C7B8C40F717.json": "279C5069634221D9CEE6238F8F706662A8D5CD15D0AC2A2F77A6AA541E7CED50",
+    "memory\\.pending_memory_obligations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\hook-audit.jsonl": "0DF52BF927E4521565FBEFC22E6E9CC4E0C0826ED0AFFF3C1CC7A42D64BC261C",
+    "memory\\.pending_memory_obligations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\MEM-OBL-00CB5E8FBB19229D.json": "C59DDC0D3DB402B02CF10E666BB856895696FE4245698246D3A75E2352B885DC",
+    "memory\\.pending_memory_obligations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\hook-audit.jsonl": "BD61795C14A5F09FBA4B940AA8CE247B12E70EF0E8C1BBADD2FF4C0F4477C6AF",
+    "memory\\.pending_memory_obligations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\MEM-OBL-5E77875AE8C1ADE1.json": "671277026087B575942EB9B1ACDC3EC5B7FC6CE7489BA151CF1344244E7237F1",
+    "memory\\.pending_memory_obligations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\hook-audit.jsonl": "E2F17551851D66705CC32FCF6ABE926458B45DE6D623472872B589D1921EE9D8",
+    "memory\\.pending_memory_obligations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\MEM-OBL-DE6E16ADFFF19BFC.json": "FD55EFF14068F63ABAA0D6271DDB174A28463C6720663B85E99A29A1E139FE3E",
+    "memory\\.memory_obligation_observations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\9ea2dcb0fe9147ff808552cdc3348cf8.json": "E00AD492F4ECFAFE618F72C1C33574134D8DF19FC8C84B8A14C7B2AD41A01885",
+    "memory\\.memory_obligation_observations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\cbcee7de70184bbabc2e921823513217.json": "E7A63970C2E60E951AFEE994CCA62DD3236C9E8D986F02DA74ACFB628A1018F6",
+    "memory\\.memory_obligation_observations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\813caf7161114f7f92957ba290eb0824.json": "F1A0AFC9784E2A93E7D86344296834E7A1E037207F5C0D0D29A1D39D24AD3901",
+    "memory\\.memory_obligation_observations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\7f0534ff804444318f0e298d1034dd84.json": "076DC4A31B9E7414A1F9FEBC094DC5E9AECCA5C53B284A7F0E26164D8BDF3626",
+    "memory\\.memory_obligation_observations\\01a0f1e8-8d99-7881-b713-9ce64a063b10\\8b46eb88e6b0406f8b7125bbab416c8a.json": "C20FF17F882851307EDB4C024437327EB25722EBFB285D8625ED7DB7B6B81EA5"
+  },
+  "pending_evidence_after": {
+    "memory\\.pending_memory_obligations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\hook-audit.jsonl": "DE7E20D476AEF2765FC29BF0A4327BC358CB887CD10AB98D05504CFD6F487F6E",
+    "memory\\.pending_memory_obligations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\MEM-OBL-7C719C7B8C40F717.json": "279C5069634221D9CEE6238F8F706662A8D5CD15D0AC2A2F77A6AA541E7CED50",
+    "memory\\.pending_memory_obligations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\hook-audit.jsonl": "0DF52BF927E4521565FBEFC22E6E9CC4E0C0826ED0AFFF3C1CC7A42D64BC261C",
+    "memory\\.pending_memory_obligations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\MEM-OBL-00CB5E8FBB19229D.json": "C59DDC0D3DB402B02CF10E666BB856895696FE4245698246D3A75E2352B885DC",
+    "memory\\.pending_memory_obligations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\hook-audit.jsonl": "BD61795C14A5F09FBA4B940AA8CE247B12E70EF0E8C1BBADD2FF4C0F4477C6AF",
+    "memory\\.pending_memory_obligations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\MEM-OBL-5E77875AE8C1ADE1.json": "671277026087B575942EB9B1ACDC3EC5B7FC6CE7489BA151CF1344244E7237F1",
+    "memory\\.pending_memory_obligations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\hook-audit.jsonl": "E2F17551851D66705CC32FCF6ABE926458B45DE6D623472872B589D1921EE9D8",
+    "memory\\.pending_memory_obligations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\MEM-OBL-DE6E16ADFFF19BFC.json": "FD55EFF14068F63ABAA0D6271DDB174A28463C6720663B85E99A29A1E139FE3E",
+    "memory\\.memory_obligation_observations\\01a0f1ca-1877-71b3-b056-a5d8301925b3\\9ea2dcb0fe9147ff808552cdc3348cf8.json": "E00AD492F4ECFAFE618F72C1C33574134D8DF19FC8C84B8A14C7B2AD41A01885",
+    "memory\\.memory_obligation_observations\\01a0f1d3-a92b-74b3-a2a6-60882a33078b\\cbcee7de70184bbabc2e921823513217.json": "E7A63970C2E60E951AFEE994CCA62DD3236C9E8D986F02DA74ACFB628A1018F6",
+    "memory\\.memory_obligation_observations\\01a0f1da-cc0f-72e0-bf17-a61e483f6261\\813caf7161114f7f92957ba290eb0824.json": "F1A0AFC9784E2A93E7D86344296834E7A1E037207F5C0D0D29A1D39D24AD3901",
+    "memory\\.memory_obligation_observations\\01a0f1e0-3e29-7ef3-9e42-ea11669fac72\\7f0534ff804444318f0e298d1034dd84.json": "076DC4A31B9E7414A1F9FEBC094DC5E9AECCA5C53B284A7F0E26164D8BDF3626",
+    "memory\\.memory_obligation_observations\\01a0f1e8-8d99-7881-b713-9ce64a063b10\\8b46eb88e6b0406f8b7125bbab416c8a.json": "C20FF17F882851307EDB4C024437327EB25722EBFB285D8625ED7DB7B6B81EA5"
+  },
+  "before": [
+    {
+      "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+      "errors": [],
+      "warnings": [],
+      "hooks": [
+        {
+          "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0",
+          "eventName": "postToolUse",
+          "enabled": true,
+          "source": "project",
+          "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+          "trustStatus": "trusted",
+          "currentHash": "sha256:fa3c499b487b6defd813a6a91bbf6d9126dca3240e0780cc53ff2f3bb347d999"
+        },
+        {
+          "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0",
+          "eventName": "stop",
+          "enabled": true,
+          "source": "project",
+          "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+          "trustStatus": "trusted",
+          "currentHash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272"
+        }
+      ]
+    }
+  ],
+  "disabled": [
+    {
+      "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+      "errors": [],
+      "warnings": [],
+      "hooks": []
+    }
+  ],
+  "restored": [
+    {
+      "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+      "errors": [],
+      "warnings": [],
+      "hooks": [
+        {
+          "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0",
+          "eventName": "postToolUse",
+          "enabled": true,
+          "source": "project",
+          "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+          "trustStatus": "trusted",
+          "currentHash": "sha256:fa3c499b487b6defd813a6a91bbf6d9126dca3240e0780cc53ff2f3bb347d999"
+        },
+        {
+          "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0",
+          "eventName": "stop",
+          "enabled": true,
+          "source": "project",
+          "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+          "trustStatus": "trusted",
+          "currentHash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272"
+        }
+      ]
+    }
+  ],
+  "scope": "remove only installed obligation wiring; retain checker, contract, trust and pending evidence"
+}

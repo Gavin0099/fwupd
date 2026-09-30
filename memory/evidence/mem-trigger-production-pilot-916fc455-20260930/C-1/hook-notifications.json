@@ -1,0 +1,98 @@
+[
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1e8-8d99-7881-b713-9ce64a063b10",
+      "turnId": "01a0f1e8-8e25-7082-9fb8-014888d4127e",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-5a2793a6-8a01-4b18-8645-5a1abd5a2ee3",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790764967,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790764967880
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1e8-8d99-7881-b713-9ce64a063b10",
+      "turnId": "01a0f1e8-8e25-7082-9fb8-014888d4127e",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-5a2793a6-8a01-4b18-8645-5a1abd5a2ee3",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790764967,
+        "completedAt": 1790764971,
+        "durationMs": 3313,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790764971194
+  },
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1e8-8d99-7881-b713-9ce64a063b10",
+      "turnId": "01a0f1e8-8e25-7082-9fb8-014888d4127e",
+      "run": {
+        "id": "stop:1:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "eventName": "stop",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 1,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790765002,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790765002222
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1e8-8d99-7881-b713-9ce64a063b10",
+      "turnId": "01a0f1e8-8e25-7082-9fb8-014888d4127e",
+      "run": {
+        "id": "stop:1:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "eventName": "stop",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 1,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790765002,
+        "completedAt": 1790765004,
+        "durationMs": 2415,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790765004651
+  }
+]

@@ -1,0 +1,81 @@
+{
+  "mode": "VALIDATION",
+  "mode_source": "installation_and_codex_native_hook_trust_verification",
+  "task_authority": "Owner authorized proceeding with second delivery slice: installation + trust",
+  "scope": [
+    "E:/BackUp/Git_EE/fwupd/.codex/hooks.json",
+    "E:/BackUp/Git_EE/fwupd/.codex/memory-obligation-contract.json",
+    "E:/BackUp/Git_EE/fwupd/.governance/check-fwupd-container-prereq.ps1",
+    "C:/Users/reiko/.codex/config.toml (only fwupd project trust and two exact Hook state keys)",
+    "E:/BackUp/Git_EE/fwupd/memory/evidence/mem-trigger-install-916fc455-20260930/"
+  ],
+  "done": [
+    "Installed exact locked three-file generation bound to committed delivery 916fc455",
+    "Persisted only fwupd project trust and exact-definition trust for the two installed Hooks",
+    "Codex hooks/list confirms both enabled/trusted with no errors or warnings and no other effective Stop",
+    "Existing consumer Hook files, HEAD and submodule preserved"
+  ],
+  "claim_ceiling": [
+    "Installation and persistent trust proven; no live production behavior qualification"
+  ],
+  "not_claimed": [
+    "Production M1/M3 fixed",
+    "Production A/B/C/D executed",
+    "Live parallel Stop coexistence qualified",
+    "Rollback rehearsal completed",
+    "Consumer commit/push or framework update",
+    "Canonical daily/active-task milestone companion persisted",
+    "Clean consumer workspace or overall delivery DONE",
+    "Session-end closeout"
+  ],
+  "evidence_refs": [
+    {
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\installation-preflight.json",
+      "result": "PASS"
+    },
+    {
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\installation-result.json",
+      "result": "INSTALLED_AND_TRUSTED"
+    },
+    {
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\effective-hooks-after-trust.json",
+      "result": "PASS",
+      "meaning": "Two exact definitions enabled/trusted; not delivery during a model turn"
+    },
+    {
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\project-trust-result.json",
+      "result": "PASS"
+    },
+    {
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\hook-trust-result.json",
+      "result": "PASS"
+    },
+    {
+      "command": "python -B -m governance_tools.memory_workflow --repo E:/BackUp/Git_EE/fwupd --check --run-guard --format json",
+      "artifact": "E:\\BackUp\\Git_EE\\fwupd\\memory\\evidence\\mem-trigger-install-916fc455-20260930\\memory-workflow-report.json",
+      "exit_code": 0,
+      "guard_ran": true,
+      "completion_claim_allowed": true,
+      "blockers": [],
+      "warnings": [
+        "missing_canonical_memory",
+        "unbound_memory",
+        "test_evidence_provenance_not_found",
+        "test_evidence_artifact_metadata_missing"
+      ],
+      "background_warnings": []
+    },
+    {
+      "source": "https://learn.chatgpt.com/docs/hooks",
+      "meaning": "Project trust and exact-definition trust are distinct; config sources merge and matching hooks may run concurrently"
+    }
+  ],
+  "risk": [
+    "Production pilot remains required before claiming M1/M3 repair",
+    "OS/interpreter and selected-workflow assumptions unchanged",
+    "Deployment is a local uncommitted consumer modification; pending evidence retained during rollback"
+  ],
+  "workspace_state": "NOT CLEAN",
+  "overall_task": "NOT DONE: second installation/trust slice complete; production pilot and delivery remain outstanding",
+  "next_action": "Run separately scoped controlled production A/B/C/D, effective Stop coexistence verification and rollback rehearsal under the existing plan; add no new gates unless a real production blocker appears"
+}

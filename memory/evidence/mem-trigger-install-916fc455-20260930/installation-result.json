@@ -1,0 +1,38 @@
+{
+  "result": "INSTALLED_AND_TRUSTED",
+  "delivery_commit": "916fc455f239e1e12922057e36982e6b93431b42",
+  "consumer_root": "E:\\BackUp\\Git_EE\\fwupd",
+  "installed_files": {
+    ".governance/check-fwupd-container-prereq.ps1": {
+      "sha256": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380",
+      "previously_absent": true,
+      "bytes": 3157
+    },
+    ".codex/memory-obligation-contract.json": {
+      "sha256": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+      "previously_absent": true,
+      "bytes": 485
+    },
+    ".codex/hooks.json": {
+      "sha256": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+      "previously_absent": true,
+      "bytes": 26429
+    }
+  },
+  "hooks_definition_sha256": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+  "project_trust_persisted": true,
+  "hook_definition_trust_persisted": true,
+  "trusted_enabled_events": [
+    "postToolUse",
+    "stop"
+  ],
+  "other_effective_stop_count": 0,
+  "other_project_config_unchanged": true,
+  "existing_hooks_and_gitlink_unchanged": true,
+  "commit_created": false,
+  "pushed": false,
+  "production_pilot_run": false,
+  "rollback_rehearsed": false,
+  "production_M1_M3_fixed": false,
+  "rollback_contract": "Remove only installed obligation Hook entries after exact generation comparison; retain pending/observation/error evidence. Trust changes are scoped to this project and the two exact Hook keys. Do not erase unresolved evidence."
+}

@@ -1,0 +1,7 @@
+{"timestamp":"2026-09-30T10:19:35.570529Z","level":"WARN","fields":{"message":"ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/"},"target":"codex_skills::interface"}
+{"timestamp":"2026-09-30T10:19:35.570643Z","level":"WARN","fields":{"message":"ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/"},"target":"codex_skills::interface"}
+{"timestamp":"2026-09-30T10:19:35.608452Z","level":"WARN","fields":{"message":"Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell"},"target":"codex_core::shell_snapshot"}
+{"timestamp":"2026-09-30T10:19:35.692463Z","level":"ERROR","fields":{"message":"failed to load skill C:\\Users\\reiko\\.agents\\skills\\push\\SKILL.md: missing YAML frontmatter delimited by ---"},"target":"codex_core::session::session"}
+{"timestamp":"2026-09-30T10:19:37.131370Z","level":"WARN","fields":{"message":"ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/"},"target":"codex_skills::interface"}
+{"timestamp":"2026-09-30T10:19:37.131499Z","level":"WARN","fields":{"message":"ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/"},"target":"codex_skills::interface"}
+{"timestamp":"2026-09-30T10:24:14.064257Z","level":"ERROR","fields":{"message":"failed to refresh available models: request timed out"},"target":"codex_models_manager::manager"}

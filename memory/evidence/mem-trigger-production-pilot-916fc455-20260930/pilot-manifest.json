@@ -1,0 +1,30 @@
+{
+  "scope": "third controlled production pilot only; no new gate",
+  "framework_delivery_commit": "916fc455f239e1e12922057e36982e6b93431b42",
+  "consumer_head": "2a638885417b2dbd275eae7344886ff987761b7d",
+  "source_files": {
+    "governance_tools/required_memory_bootstrap.py": "F191C081E03EFE216F651A44D4835B7AA07E245986FDECFEA41800FE3724D01E",
+    "governance_tools/required_memory_launcher.py": "39C90BDEFCAD06B9783077DD8BDD743CC12C628F87C6FF5F496CB08E918641ED",
+    "governance_tools/required_memory_obligation.py": "8FBB4A3DDC40A34ED5F3283C35C01BB34EB77862C3477672A4EABEC11900E6A2"
+  },
+  "previous_installation_evidence": "memory/evidence/mem-trigger-install-916fc455-20260930/",
+  "artifacts_uncommitted": true,
+  "docker_conditions": "process-local fake docker.exe on PATH, same environment for original checker and independent Hook recheck",
+  "initial_state": "A-1/snapshots/before; no production obligation sessions existed before this pilot",
+  "attempt_deadlines": {
+    "A-1": 420,
+    "A-2": 420,
+    "subsequent_attempts": 900
+  },
+  "deadline_change": "harness window only; installed generation and acceptance unchanged",
+  "exclusions": [
+    "product files",
+    "firmware",
+    "USB",
+    "NUC",
+    "Docker service/global PATH changes",
+    "commit",
+    "push",
+    "new guard or schema"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "receipt_schema": "test_evidence_receipt.v0.1",
+  "status": "report_only",
+  "command": "docker exec fwupd-genesys-verify-20260923 /bin/sh -lc \"set -e; meson compile -C /tmp/fwupd-build-lf fu_plugin_genesys fwupdtool fwupdplugin-firmware-test; meson test -C /tmp/fwupd-build-lf fwupdplugin-firmware-test --print-errorlogs; /tmp/fwupd-build-lf/src/fwupdtool --plugins genesys --json firmware-parse /p40/GL3525-OVY1L_LNV_P40WD_L1_FW8000.bin genesys-usbhub; /tmp/fwupd-build-lf/src/fwupdtool --plugins genesys --json firmware-parse /p40/GL3523-OTY50__LNV_P40WD-40_L2_FW8100.bin genesys-usbhub; /tmp/fwupd-build-lf/src/fwupdtool --plugins genesys --json firmware-parse /p40/GL3523-OTY50__LNV_P40WD-40_L3_FW8203.bin genesys-usbhub\"",
+  "exit_code": 0,
+  "started_at": "2026-09-24T02:19:32Z",
+  "finished_at": "2026-09-24T02:19:34Z",
+  "runner": "governance_tools.test_evidence_receipt_writer",
+  "linked_commit": "2a638885417b2dbd275eae7344886ff987761b7d",
+  "output_artifacts": [
+    "artifacts/evidence/test-results/genesys-focused-20260923.txt"
+  ],
+  "cannot_claim": [
+    "semantic correctness of the tested behavior",
+    "receipt authenticity: every field is fabricatable by a direct writer"
+  ]
+}

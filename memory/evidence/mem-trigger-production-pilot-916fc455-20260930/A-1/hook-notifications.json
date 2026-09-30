@@ -1,0 +1,199 @@
+[
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-9bc7a570-2f3d-43f1-8cec-717e333bbc8c",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790762973,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790762974240
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-9bc7a570-2f3d-43f1-8cec-717e333bbc8c",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790762973,
+        "completedAt": 1790762976,
+        "durationMs": 2638,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790762976282
+  },
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-5779e95a-5682-47a6-8f23-23c0c9d40000",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790763000,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790763000937
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-5779e95a-5682-47a6-8f23-23c0c9d40000",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790763000,
+        "completedAt": 1790763002,
+        "durationMs": 1879,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790763002808
+  },
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-8fe7c811-e336-4ab2-b5f8-7f6c22378750",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790763047,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790763047145
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-8fe7c811-e336-4ab2-b5f8-7f6c22378750",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790763047,
+        "completedAt": 1790763048,
+        "durationMs": 1588,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790763048726
+  },
+  {
+    "method": "hook/started",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-d7fa5983-6811-4ab4-9f27-3f13c72ebc65",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "running",
+        "statusMessage": null,
+        "startedAt": 1790763104,
+        "completedAt": null,
+        "durationMs": null,
+        "entries": []
+      }
+    },
+    "emittedAtMs": 1790763104796
+  },
+  {
+    "method": "hook/completed",
+    "params": {
+      "threadId": "01a0f1ca-1877-71b3-b056-a5d8301925b3",
+      "turnId": "01a0f1ca-1919-71c2-ba4f-c31f097963bf",
+      "run": {
+        "id": "post-tool-use:0:E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:exec-d7fa5983-6811-4ab4-9f27-3f13c72ebc65",
+        "eventName": "postToolUse",
+        "handlerType": "command",
+        "executionMode": "sync",
+        "scope": "turn",
+        "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+        "source": "project",
+        "displayOrder": 0,
+        "status": "completed",
+        "statusMessage": null,
+        "startedAt": 1790763104,
+        "completedAt": 1790763108,
+        "durationMs": 3396,
+        "entries": [
+          {
+            "kind": "context",
+            "text": "Required dependency docker-engine is blocked. Memory obligation MEM-OBL-7C719C7B8C40F717 is pending. Add one risk line containing both the obligation ID and dependency under a Risks/風險 heading in PLAN.md, and one line containing both in memory/01_active_task.md before this turn ends."
+          }
+        ]
+      }
+    },
+    "emittedAtMs": 1790763108186
+  }
+]

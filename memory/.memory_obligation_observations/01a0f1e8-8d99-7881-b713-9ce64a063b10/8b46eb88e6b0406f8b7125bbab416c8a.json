@@ -1,0 +1,8 @@
+{
+  "session_id": "01a0f1e8-8d99-7881-b713-9ce64a063b10",
+  "turn_id": "01a0f1e8-8e25-7082-9fb8-014888d4127e",
+  "tool_use_id": "exec-5a2793a6-8a01-4b18-8645-5a1abd5a2ee3",
+  "event_id": "FWUPD-BUILD-DOCKER-001",
+  "dependency": "docker-engine",
+  "status": "no_blocker"
+}

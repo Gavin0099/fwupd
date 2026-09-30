@@ -1,0 +1,44 @@
+{
+  "request": {
+    "edits": [
+      {
+        "keyPath": "hooks.state",
+        "value": {
+          "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0": {
+            "trusted_hash": "sha256:fa3c499b487b6defd813a6a91bbf6d9126dca3240e0780cc53ff2f3bb347d999",
+            "enabled": true
+          },
+          "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0": {
+            "trusted_hash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272",
+            "enabled": true
+          }
+        },
+        "mergeStrategy": "upsert"
+      }
+    ],
+    "filePath": "C:\\Users\\reiko\\.codex\\config.toml",
+    "expectedVersion": "sha256:c2243e3ef336b993a18b54a77d3c1eba0b69260a94d1d95635eb1de43bd48599",
+    "reloadUserConfig": false
+  },
+  "response": {
+    "status": "ok",
+    "version": "sha256:987ae270c33a7d8a95040bcfd481dcb74a9de850aae9d6a60909c4ff4f17c8f8",
+    "filePath": "C:\\Users\\reiko\\.codex\\config.toml",
+    "overriddenMetadata": null
+  },
+  "previous_entries": {
+    "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0": null,
+    "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0": null
+  },
+  "new_entries": {
+    "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:post_tool_use:0:0": {
+      "trusted_hash": "sha256:fa3c499b487b6defd813a6a91bbf6d9126dca3240e0780cc53ff2f3bb347d999",
+      "enabled": true
+    },
+    "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0": {
+      "trusted_hash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272",
+      "enabled": true
+    }
+  },
+  "unrelated_config_values_unchanged": true
+}

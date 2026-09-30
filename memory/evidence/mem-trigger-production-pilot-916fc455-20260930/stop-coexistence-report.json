@@ -1,0 +1,28 @@
+{
+  "result": "CURRENT_EFFECTIVE_INVENTORY_VERIFIED",
+  "effective_stop_count": 1,
+  "definitions": [
+    {
+      "key": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json:stop:0:0",
+      "eventName": "stop",
+      "source": "project",
+      "sourcePath": "E:\\BackUp\\Git_EE\\fwupd\\.codex\\hooks.json",
+      "currentHash": "sha256:74cf94bca66dca30ca44f657bd0df6f49952a74366f478efb44d46100d0d2272",
+      "trustStatus": "trusted",
+      "enabled": true
+    }
+  ],
+  "other_effective_stop_count": 0,
+  "parallel_coexistence_result": "NOT APPLICABLE: no other effective Stop in current inventory",
+  "not_claimed": [
+    "Safety with additional future concurrent Stop hooks",
+    "JSON order as runtime ordering guarantee"
+  ],
+  "source": "rollback-restored/effective-hooks.json",
+  "live_evidence": [
+    "A-3/hook-notifications.json",
+    "B-1/hook-notifications.json",
+    "C-1/hook-notifications.json",
+    "D-1/hook-notifications.json"
+  ]
+}

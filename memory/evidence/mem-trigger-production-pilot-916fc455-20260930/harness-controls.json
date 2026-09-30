@@ -1,0 +1,23 @@
+{
+  "installed_pins": {
+    ".codex/hooks.json": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+    ".codex/memory-obligation-contract.json": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+    ".governance/check-fwupd-container-prereq.ps1": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380"
+  },
+  "fake_docker_sha256": "CAEB1199786EB0C8EF0B9B9AC72FCE293AAF8D2CCE8250F69505B5A7C8FA5930",
+  "process_local_only": true,
+  "controls": [
+    {
+      "condition": "blocked",
+      "exit_code": 42,
+      "stdout": "GOVERNANCE_EVENT_V1 {\"id\":\"FWUPD-BUILD-DOCKER-001\",\"type\":\"required_dependency_blocked\",\"dependency\":\"docker-engine\",\"status\":\"blocked\"}\r\nWindows Docker-container build blocked: docker-engine-unavailable\r\n",
+      "stderr": ""
+    },
+    {
+      "condition": "ready",
+      "exit_code": 0,
+      "stdout": "Windows Docker-container build prerequisite ready: Docker Engine responded.\r\n",
+      "stderr": ""
+    }
+  ]
+}

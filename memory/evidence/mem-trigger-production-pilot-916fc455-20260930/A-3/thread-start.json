@@ -1,0 +1,69 @@
+{
+  "thread": {
+    "id": "01a0f1da-cc0f-72e0-bf17-a61e483f6261",
+    "environments": [
+      {
+        "environmentId": "local",
+        "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+        "runtimeWorkspaceRoots": [
+          "E:\\BackUp\\Git_EE\\fwupd"
+        ]
+      }
+    ],
+    "extra": null,
+    "sessionId": "01a0f1da-cc0f-72e0-bf17-a61e483f6261",
+    "forkedFromId": null,
+    "parentThreadId": null,
+    "preview": "",
+    "ephemeral": true,
+    "section": null,
+    "sectionEnteredAt": null,
+    "projectId": null,
+    "historyMode": "paginated",
+    "modelProvider": "openai",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "xhigh",
+    "createdAt": 1790764043,
+    "updatedAt": 1790764043,
+    "recencyAt": 1790764043,
+    "status": {
+      "type": "idle"
+    },
+    "path": null,
+    "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+    "cliVersion": "0.159.0",
+    "originator": "Codex Desktop",
+    "source": "vscode",
+    "canAcceptDirectInput": true,
+    "threadSource": null,
+    "agentNickname": null,
+    "agentRole": null,
+    "gitInfo": null,
+    "name": null,
+    "daybreakEnabled": null,
+    "turns": []
+  },
+  "model": "gpt-6.1-sol",
+  "modelProvider": "openai",
+  "serviceTier": "default",
+  "disabledPluginIds": [],
+  "cwd": "E:\\BackUp\\Git_EE\\fwupd",
+  "runtimeWorkspaceRoots": [
+    "E:\\BackUp\\Git_EE\\fwupd"
+  ],
+  "instructionSources": [
+    "E:\\BackUp\\Git_EE\\fwupd\\AGENTS.md"
+  ],
+  "approvalPolicy": "never",
+  "approvalsReviewer": "user",
+  "sandbox": {
+    "type": "workspaceWrite",
+    "writableRoots": [],
+    "networkAccess": false,
+    "excludeTmpdirEnvVar": false,
+    "excludeSlashTmp": false
+  },
+  "activePermissionProfile": null,
+  "reasoningEffort": "xhigh",
+  "multiAgentMode": "explicitRequestOnly"
+}
