@@ -1,0 +1,59 @@
+{
+  "result": "PASS",
+  "implementation_commit": "b91a35b4b17d2e2e104e3f68fe6344c688f1d821",
+  "parent_commit": "1b69655baf6044b2949699caa13ebb50dc11a062",
+  "committed_paths": [
+    ".gitattributes",
+    "memory/evidence/mem-trigger-eol-fix-20261001/checkout-identity-report.json"
+  ],
+  "gitattributes_blob_sha256": "D1A59CFDEC932DDADCFDAB6BC6C54E905AD6BDC4096AF2380C1D246CB14001CA",
+  "committed_deployment_blob_checks": [
+    {
+      "path": ".codex/hooks.json",
+      "blob_sha256": "13293C4136A6626A8BAA695BE3870B4D6CD9AE37FB65D0F3DACF08203D0DDA74",
+      "parent_blob_sha256": "13293C4136A6626A8BAA695BE3870B4D6CD9AE37FB65D0F3DACF08203D0DDA74",
+      "unchanged": true
+    },
+    {
+      "path": ".codex/memory-obligation-contract.json",
+      "blob_sha256": "27A5379BE5E4F18AD23C43D3F655DDD90EA9D012118C6FD1202B60882D26B09E",
+      "parent_blob_sha256": "27A5379BE5E4F18AD23C43D3F655DDD90EA9D012118C6FD1202B60882D26B09E",
+      "unchanged": true
+    },
+    {
+      "path": ".governance/check-fwupd-container-prereq.ps1",
+      "blob_sha256": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380",
+      "parent_blob_sha256": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380",
+      "unchanged": true
+    }
+  ],
+  "committed_tree_checkout_checks": [
+    {
+      "core_autocrlf": "true",
+      "checkout_sha256": {
+        ".codex/hooks.json": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+        ".codex/memory-obligation-contract.json": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+        ".governance/check-fwupd-container-prereq.ps1": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380"
+      },
+      "matches_pilot": true
+    },
+    {
+      "core_autocrlf": "false",
+      "checkout_sha256": {
+        ".codex/hooks.json": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+        ".codex/memory-obligation-contract.json": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+        ".governance/check-fwupd-container-prereq.ps1": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380"
+      },
+      "matches_pilot": true
+    }
+  ],
+  "expected_pilot_sha256": {
+    ".codex/hooks.json": "A82DBE69A0792F2E443C0B4E079852E3187EEFE9BB0F138A36F4EF89E0BDF646",
+    ".codex/memory-obligation-contract.json": "017F586E5408DE7BD355D715C3031971F4884491E4E7D91A8240C739A28C4F35",
+    ".governance/check-fwupd-container-prereq.ps1": "8E5DC0396E6B9D549D138CD7CC87B60692EF2C4CBDE8833B176D2528D859B380"
+  },
+  "interpretation": "Git text blobs and checkout EOL representation are distinct. Deployed source blobs are unchanged; committed attributes reproduce exact frozen runtime bytes.",
+  "real_index_untouched": true,
+  "live_abcd": "NOT RERUN: deployed bytes unchanged",
+  "push_pr_merge": "NOT PERFORMED"
+}
