@@ -1,0 +1,5 @@
+# Checkout bytes are part of the MEM-TRIGGER-001 deployment identity.
+# Preserve the approved pilot representation for these three files only.
+/.codex/hooks.json text eol=crlf
+/.codex/memory-obligation-contract.json text eol=crlf
+/.governance/check-fwupd-container-prereq.ps1 text eol=lf
