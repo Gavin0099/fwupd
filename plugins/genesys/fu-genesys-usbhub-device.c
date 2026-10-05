@@ -46,6 +46,7 @@
 
 #define GENESYS_USBHUB_USB_TIMEOUT	   5000 /* ms */
 #define GENESYS_USBHUB_FLASH_WRITE_TIMEOUT 500	/* ms */
+#define GENESYS_USBHUB_DEFAULT_REMOVE_DELAY 5000 /* ms */
 
 #define GL3523_BONDING_VALID_BIT 0x0F
 #define GL3590_BONDING_VALID_BIT 0x7F
@@ -1390,6 +1391,15 @@ fu_genesys_usbhub_device_attach(FuDevice *device, FuProgress *progress, GError *
 	return TRUE;
 }
 
+static void
+fu_genesys_usbhub_device_replace(FuDevice *device, FuDevice *donor)
+{
+	FuDeviceClass *device_class = FU_DEVICE_CLASS(fu_genesys_usbhub_device_parent_class);
+	if (device_class->replace != NULL)
+		device_class->replace(device, donor);
+	fu_genesys_usbhub_device_apply_p40_remove_delay(FU_GENESYS_USBHUB_DEVICE(device));
+}
+
 static GBytes *
 fu_genesys_usbhub_device_dump_firmware(FuDevice *device, FuProgress *progress, GError **error)
 {
@@ -1515,6 +1525,18 @@ fu_genesys_usbhub_device_setup_flash(FuGenesysUsbhubDevice *self, GError **error
 	return TRUE;
 }
 
+void
+fu_genesys_usbhub_device_apply_p40_remove_delay(FuGenesysUsbhubDevice *self)
+{
+	g_return_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self));
+
+	/* a quirk RemoveDelay differing from the init default is authoritative */
+	if (fu_device_has_private_flag(FU_DEVICE(self),
+				       FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK) &&
+	    fu_device_get_remove_delay(FU_DEVICE(self)) == GENESYS_USBHUB_DEFAULT_REMOVE_DELAY)
+		fu_device_set_remove_delay(FU_DEVICE(self), FU_DEVICE_REMOVE_DELAY_USER_REPLUG);
+}
+
 static gboolean
 fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 {
@@ -1532,6 +1554,7 @@ fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 		g_prefix_error_literal(error, "error setting up device: ");
 		return FALSE;
 	}
+	fu_genesys_usbhub_device_apply_p40_remove_delay(self);
 
 	/* validate by string token */
 	if (!fu_genesys_usbhub_device_validate_token(self, error))
@@ -3380,7 +3403,7 @@ fu_genesys_usbhub_device_init(FuGenesysUsbhubDevice *self)
 	fu_device_add_private_flag(FU_DEVICE(self), FU_DEVICE_PRIVATE_FLAG_NO_GENERIC_GUIDS);
 	fu_device_add_protocol(FU_DEVICE(self), "com.genesys.usbhub");
 	fu_device_retry_set_delay(FU_DEVICE(self), 30);	   /* 30ms */
-	fu_device_set_remove_delay(FU_DEVICE(self), 5000); /* 5s */
+	fu_device_set_remove_delay(FU_DEVICE(self), GENESYS_USBHUB_DEFAULT_REMOVE_DELAY);
 	fu_device_set_proxy_gtype(FU_DEVICE(self), FU_TYPE_GENESYS_HUBHID_DEVICE);
 	fu_device_set_install_duration(FU_DEVICE(self), 9); /* 9 s */
 	fu_device_set_firmware_gtype(FU_DEVICE(self), FU_TYPE_GENESYS_USBHUB_FIRMWARE);
@@ -3444,6 +3467,7 @@ fu_genesys_usbhub_device_class_init(FuGenesysUsbhubDeviceClass *klass)
 	device_class->set_progress = fu_genesys_usbhub_device_set_progress;
 	device_class->detach = fu_genesys_usbhub_device_detach;
 	device_class->attach = fu_genesys_usbhub_device_attach;
+	device_class->replace = fu_genesys_usbhub_device_replace;
 	device_class->to_string = fu_genesys_usbhub_device_to_string;
 	device_class->set_quirk_kv = fu_genesys_usbhub_device_set_quirk_kv;
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HAS_MSTAR_SCALER);
