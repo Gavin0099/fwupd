@@ -31,6 +31,7 @@
 #include "fu-context-private.h"
 #include "fu-debug.h"
 #include "fu-device-private.h"
+#include "fu-engine-cli-private.h"
 #include "fu-engine-cli.h"
 #include "fu-engine-helper.h"
 #include "fu-engine-requirements.h"
@@ -4077,12 +4078,9 @@ fu_engine_cli_sync_impl_install(FwupdClient *client,
 		if (device == NULL)
 			return FALSE;
 		devices_possible =
-		    fu_engine_get_devices_by_composite_id(self->engine,
-							  fu_device_get_composite_id(device),
-							  error);
+		    fu_engine_cli_get_install_devices(self->engine, FU_DEVICE(device), error);
 		if (devices_possible == NULL)
 			return FALSE;
-		g_ptr_array_add(devices_possible, device);
 	}
 
 	/* download if required */

@@ -254,7 +254,7 @@ executable(
   fwupdengine_rs,
   plugins_hdr,
   export_dynamic: true,
-  sources: ['fu-engine-cli.c'],
+  sources: ['fu-engine-cli.c', 'fu-engine-cli-private.c'],
   include_directories: [root_incdir, fwupd_incdir, fwupdplugin_incdir],
   dependencies: [libfwupd_deps, client_dep, valgrind],
   link_with: [fwupdengine, fwupdcli, plugin_libs],
@@ -594,6 +594,10 @@ if get_option('tests')
     test_names += 'unix-seekable-input-stream'
   endif
   foreach test_name : test_names
+    test_sources = ['fu-' + test_name + '-test.c']
+    if test_name == 'engine'
+      test_sources += 'fu-engine-cli-private.c'
+    endif
     e = executable(
       'fu-' + test_name + '-test',
       fwupdcli_rs,
@@ -604,7 +608,7 @@ if get_option('tests')
       noreqs_test_firmware,
       plugins_hdr,
       firmware_xml_gz_jcat,
-      sources: ['fu-' + test_name + '-test.c'],
+      sources: test_sources,
       include_directories: [root_incdir, fwupd_incdir, fwupdplugin_incdir],
       dependencies: [engine_dep],
       link_with: [fwupdengine, fwupdcli, libfutest, plugin_libs],

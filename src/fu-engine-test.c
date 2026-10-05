@@ -12,6 +12,7 @@
 #include "fu-config-private.h"
 #include "fu-context-private.h"
 #include "fu-device-private.h"
+#include "fu-engine-cli-private.h"
 #include "fu-engine-requirements.h"
 #include "fu-engine.h"
 #include "fu-history.h"
@@ -351,6 +352,120 @@ fu_engine_device_parent_id_func(void)
 	g_assert_true(fu_device_get_parent_internal(device5) == device2);
 	g_assert_true(fu_device_get_parent_internal(device1) == device2);
 	g_assert_cmpstr(fu_device_get_vendor(device3), ==, "oem");
+}
+
+static guint
+fu_engine_test_device_id_count(GPtrArray *devices, const gchar *device_id)
+{
+	guint count = 0;
+	for (guint index = 0; index < devices->len; index++) {
+		FuDevice *device = g_ptr_array_index(devices, index);
+		if (g_strcmp0(fu_device_get_id(device), device_id) == 0)
+			count++;
+	}
+	return count;
+}
+
+static void
+fu_engine_cli_install_devices_selected_present_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+	g_autoptr(FuDevice) selected = fu_device_new(ctx);
+	g_autoptr(FuDevice) sibling = fu_device_new(ctx);
+	g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) devices = NULL;
+	g_autoptr(XbSilo) silo_empty = xb_silo_new();
+
+	fu_engine_set_silo(engine, silo_empty);
+	fu_device_set_id(selected, "selected");
+	fu_device_set_id(sibling, "sibling");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(selected),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(sibling),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fu_engine_add_device(engine, selected);
+	fu_engine_add_device(engine, sibling);
+
+	devices = fu_engine_cli_get_install_devices(engine, selected, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(devices);
+	g_assert_cmpuint(devices->len, ==, 2);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(selected)),
+			 ==,
+			 1);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(sibling)), ==, 1);
+}
+
+static void
+fu_engine_cli_install_devices_selected_missing_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+	g_autoptr(FuDevice) selected = fu_device_new(ctx);
+	g_autoptr(FuDevice) sibling = fu_device_new(ctx);
+	g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) devices = NULL;
+	g_autoptr(XbSilo) silo_empty = xb_silo_new();
+
+	fu_engine_set_silo(engine, silo_empty);
+	fu_device_set_id(selected, "selected");
+	fu_device_set_id(sibling, "sibling");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(selected),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(sibling),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fu_engine_add_device(engine, sibling);
+
+	devices = fu_engine_cli_get_install_devices(engine, selected, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(devices);
+	g_assert_cmpuint(devices->len, ==, 2);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(selected)),
+			 ==,
+			 1);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(sibling)), ==, 1);
+}
+
+static void
+fu_engine_cli_install_devices_multiple_siblings_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+	g_autoptr(FuDevice) selected = fu_device_new(ctx);
+	g_autoptr(FuDevice) sibling1 = fu_device_new(ctx);
+	g_autoptr(FuDevice) sibling2 = fu_device_new(ctx);
+	g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) devices = NULL;
+	g_autoptr(XbSilo) silo_empty = xb_silo_new();
+
+	fu_engine_set_silo(engine, silo_empty);
+	fu_device_set_id(selected, "selected");
+	fu_device_set_id(sibling1, "sibling1");
+	fu_device_set_id(sibling2, "sibling2");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(selected),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(sibling1),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fwupd_device_set_composite_id(FWUPD_DEVICE(sibling2),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fu_engine_add_device(engine, selected);
+	fu_engine_add_device(engine, sibling1);
+	fu_engine_add_device(engine, sibling2);
+
+	devices = fu_engine_cli_get_install_devices(engine, selected, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(devices);
+	g_assert_cmpuint(devices->len, ==, 3);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(selected)),
+			 ==,
+			 1);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(sibling1)),
+			 ==,
+			 1);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(sibling2)),
+			 ==,
+			 1);
 }
 
 static void
@@ -2930,6 +3045,107 @@ fu_test_plugin_composite_device_added_cb(FuPlugin *plugin, FuDevice *device, gpo
 	g_ptr_array_add(devices, g_object_ref(device));
 }
 
+static void
+fu_engine_cli_install_devices_single_component_func(void)
+{
+	gboolean ret;
+	g_autoptr(FuCabinet) cabinet = fu_cabinet_new();
+	g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+	g_autoptr(FuDevice) selected = fu_device_new(ctx);
+	g_autoptr(FuDevice) sibling = fu_device_new(ctx);
+	g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+	g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+	g_autoptr(GBytes) blob = NULL;
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) components = NULL;
+	g_autoptr(GPtrArray) devices = NULL;
+	g_autoptr(GPtrArray) releases =
+	    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+	g_autoptr(XbSilo) silo_empty = xb_silo_new();
+
+	fu_engine_set_silo(engine, silo_empty);
+	blob = fu_test_build_cab(FALSE,
+				 "acme.metainfo.xml",
+				 "<component type=\"firmware\">\n"
+				 "  <id>com.acme.parent.firmware</id>\n"
+				 "  <provides><firmware type=\"flashed\">"
+				 "b585990a-003e-5270-89d5-3705a17f9a43"
+				 "</firmware></provides>\n"
+				 "  <releases><release version=\"1.2.3\"/></releases>\n"
+				 "</component>",
+				 "firmware.bin",
+				 "world",
+				 NULL);
+	ret = fu_firmware_parse_bytes(FU_FIRMWARE(cabinet),
+				      blob,
+				      0x0,
+				      FU_FIRMWARE_PARSE_FLAG_CACHE_BLOB,
+				      &error);
+	g_assert_no_error(error);
+	g_assert_true(ret);
+	components = fu_cabinet_get_components(cabinet, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(components);
+	g_assert_cmpuint(components->len, ==, 1);
+
+	fu_device_set_id(selected, "selected");
+	fu_device_set_version_format(selected, FWUPD_VERSION_FORMAT_TRIPLET);
+	fu_device_set_version(selected, "1.2.2");
+	fu_device_build_vendor_id_u16(selected, "USB", 0xFFFF);
+	fu_device_add_protocol(selected, "com.acme");
+	fu_device_add_instance_id(selected, "b585990a-003e-5270-89d5-3705a17f9a43");
+	fu_device_add_flag(selected, FWUPD_DEVICE_FLAG_UPDATABLE);
+	fu_device_add_flag(selected, FWUPD_DEVICE_FLAG_UNSIGNED_PAYLOAD);
+	fwupd_device_set_composite_id(FWUPD_DEVICE(selected),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fu_engine_add_device(engine, selected);
+
+	fu_device_set_id(sibling, "sibling");
+	fu_device_set_version_format(sibling, FWUPD_VERSION_FORMAT_TRIPLET);
+	fu_device_set_version(sibling, "1.2.2");
+	fu_device_build_vendor_id_u16(sibling, "USB", 0xFFFF);
+	fu_device_add_protocol(sibling, "com.acme");
+	fu_device_add_instance_id(sibling, "7fddead7-12b5-4fb9-9fa0-6d30305df755");
+	fu_device_add_flag(sibling, FWUPD_DEVICE_FLAG_UPDATABLE);
+	fu_device_add_flag(sibling, FWUPD_DEVICE_FLAG_UNSIGNED_PAYLOAD);
+	fwupd_device_set_composite_id(FWUPD_DEVICE(sibling),
+				      "0123456789abcdef0123456789abcdef01234567");
+	fu_engine_add_device(engine, sibling);
+
+	devices = fu_engine_cli_get_install_devices(engine, selected, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(devices);
+
+	for (guint i = 0; i < devices->len; i++) {
+		FuDevice *device = g_ptr_array_index(devices, i);
+		g_autoptr(FuRelease) release = fu_release_new();
+		g_autoptr(GError) error_local = NULL;
+
+		fu_release_set_device(release, device);
+		fu_release_set_request(release, request);
+		ret = fu_release_load(release,
+				      cabinet,
+				      g_ptr_array_index(components, 0),
+				      NULL,
+				      FWUPD_INSTALL_FLAG_NONE,
+				      &error_local);
+		if (!ret) {
+			g_assert_true(device != selected);
+			continue;
+		}
+		g_assert_true(device == selected);
+		g_ptr_array_add(releases, g_steal_pointer(&release));
+	}
+
+	g_assert_cmpuint(releases->len, ==, 1);
+	g_assert_cmpuint(devices->len, ==, 2);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(selected)),
+			 ==,
+			 1);
+	g_assert_cmpuint(fu_engine_test_device_id_count(devices, fu_device_get_id(sibling)), ==, 1);
+	g_assert_true(fu_release_get_device(g_ptr_array_index(releases, 0)) == selected);
+}
+
 static gint
 fu_plugin_composite_release_sort_cb(gconstpointer a, gconstpointer b)
 {
@@ -2969,6 +3185,7 @@ static void
 fu_engine_plugin_composite_func(void)
 {
 	FuDevice *dev_tmp;
+	FuDevice *device_selected = NULL;
 	gboolean ret;
 	g_autoptr(FuCabinet) cabinet = fu_cabinet_new();
 	g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
@@ -2979,6 +3196,7 @@ fu_engine_plugin_composite_func(void)
 	g_autoptr(GError) error = NULL;
 	g_autoptr(GPtrArray) components = NULL;
 	g_autoptr(GPtrArray) devices = NULL;
+	g_autoptr(GPtrArray) devices_possible = NULL;
 	g_autoptr(GPtrArray) releases =
 	    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
 	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
@@ -3086,14 +3304,30 @@ fu_engine_plugin_composite_func(void)
 			g_assert_nonnull(fu_device_get_parent_internal(device));
 		}
 	}
+	for (guint index = 0; index < devices->len; index++) {
+		FuDevice *device = g_ptr_array_index(devices, index);
+		if (fu_device_get_logical_id(device) == NULL) {
+			device_selected = device;
+			break;
+		}
+	}
+	g_assert_nonnull(device_selected);
+	devices_possible = fu_engine_cli_get_install_devices(engine, device_selected, &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(devices_possible);
+	g_assert_cmpuint(devices_possible->len, ==, 3);
+	g_assert_cmpuint(
+	    fu_engine_test_device_id_count(devices_possible, fu_device_get_id(device_selected)),
+	    ==,
+	    1);
 
 	/* produce install tasks */
 	for (guint i = 0; i < components->len; i++) {
 		XbNode *component = g_ptr_array_index(components, i);
 
 		/* do any devices pass the requirements */
-		for (guint j = 0; j < devices->len; j++) {
-			FuDevice *device = g_ptr_array_index(devices, j);
+		for (guint j = 0; j < devices_possible->len; j++) {
+			FuDevice *device = g_ptr_array_index(devices_possible, j);
 			g_autoptr(FuRelease) release = fu_release_new();
 			g_autoptr(GError) error_local = NULL;
 
@@ -3117,6 +3351,15 @@ fu_engine_plugin_composite_func(void)
 		}
 	}
 	g_assert_cmpint(releases->len, ==, 3);
+	{
+		guint parent_release_count = 0;
+		for (guint index = 0; index < releases->len; index++) {
+			FuRelease *release = g_ptr_array_index(releases, index);
+			if (fu_device_get_logical_id(fu_release_get_device(release)) == NULL)
+				parent_release_count++;
+		}
+		g_assert_cmpuint(parent_release_count, ==, 1);
+	}
 
 	/* sort these by version, forcing fu_engine_install_releases() to sort by device order */
 	g_ptr_array_sort(releases, fu_plugin_composite_release_sort_cb);
@@ -3644,6 +3887,12 @@ main(int argc, char **argv)
 	g_test_add_func("/fwupd/engine/downgrade", fu_engine_downgrade_func);
 	g_test_add_func("/fwupd/engine/updatable-hidden", fu_engine_updatable_hidden_func);
 	g_test_add_func("/fwupd/engine/md-verfmt", fu_engine_md_verfmt_func);
+	g_test_add_func("/fwupd/engine/cli-install-devices/selected-present",
+			fu_engine_cli_install_devices_selected_present_func);
+	g_test_add_func("/fwupd/engine/cli-install-devices/selected-missing",
+			fu_engine_cli_install_devices_selected_missing_func);
+	g_test_add_func("/fwupd/engine/cli-install-devices/multiple-siblings",
+			fu_engine_cli_install_devices_multiple_siblings_func);
 	g_test_add_func("/fwupd/engine/device-auto-parent-id", fu_engine_device_parent_id_func);
 	g_test_add_func("/fwupd/engine/device-auto-parent-guid", fu_engine_device_parent_guid_func);
 	g_test_add_func("/fwupd/engine/install-duration", fu_engine_install_duration_func);
@@ -3656,6 +3905,8 @@ main(int argc, char **argv)
 	g_test_add_func("/fwupd/engine/plugin/composite", fu_engine_plugin_composite_func);
 	g_test_add_func("/fwupd/engine/plugin/composite-multistep",
 			fu_engine_plugin_composite_multistep_func);
+	g_test_add_func("/fwupd/engine/cli-install-devices/single-component-cab",
+			fu_engine_cli_install_devices_single_component_func);
 	g_test_add_func("/fwupd/engine/write-bios-attrs", fu_engine_modify_bios_settings_func);
 	return g_test_run();
 }
