@@ -1,4 +1,6 @@
 /*
+ * Copyright 2026 Adam.Chen <Adam.Chen@genesyslogic.com.tw>
+ *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
