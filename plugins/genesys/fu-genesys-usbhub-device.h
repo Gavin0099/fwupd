@@ -21,6 +21,9 @@ G_DECLARE_FINAL_TYPE(FuGenesysUsbhubDevice,
 void
 fu_genesys_usbhub_device_set_proxy(FuGenesysUsbhubDevice *self, FuDevice *proxy);
 
+void
+fu_genesys_usbhub_device_apply_p40_remove_delay(FuGenesysUsbhubDevice *self);
+
 gboolean
 fu_genesys_usbhub_device_setup_flash_late(FuGenesysUsbhubDevice *self, GError **error);
 

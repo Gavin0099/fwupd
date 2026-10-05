@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include "fu-context-private.h"
+#include "fu-device-private.h"
 #include "fu-genesys-hubhid-device.h"
 #include "fu-genesys-usbhub-device.h"
 
@@ -172,10 +173,70 @@ fu_genesys_usbhub_device_p40_quirk_activation_func(void)
 		g_assert_cmpuint(fu_device_get_specialized_gtype(device),
 				 ==,
 				 FU_TYPE_GENESYS_USBHUB_DEVICE);
+		/* genesys.quirk provides the replug delay */
+		g_assert_cmpuint(fu_device_get_remove_delay(device),
+				 ==,
+				 FU_DEVICE_REMOVE_DELAY_USER_REPLUG);
+
+		/* no quirk value: fall back to the P40 delay */
+		fu_device_set_remove_delay(device, 5000);
+		fu_genesys_usbhub_device_apply_p40_remove_delay(FU_GENESYS_USBHUB_DEVICE(device));
+		g_assert_cmpuint(fu_device_get_remove_delay(device),
+				 ==,
+				 FU_DEVICE_REMOVE_DELAY_USER_REPLUG);
+
+		{
+			g_autoptr(FuDevice) replacement =
+			    g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+			FuDeviceClass *device_class = FU_DEVICE_GET_CLASS(replacement);
+			fu_device_set_context(replacement, ctx);
+			fu_device_add_instance_id(replacement, p40_instance_ids[i]);
+			fu_device_set_remove_delay(replacement, 5000);
+			g_assert_nonnull(device_class->replace);
+			device_class->replace(replacement, device);
+			g_assert_cmpuint(fu_device_get_remove_delay(replacement),
+					 ==,
+					 FU_DEVICE_REMOVE_DELAY_USER_REPLUG);
+		}
+
+		/* an explicit quirk RemoveDelay stays authoritative */
+		{
+			g_autoptr(FuDevice) tuned =
+			    g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+			g_autoptr(FuDevice) replacement =
+			    g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+			FuDeviceClass *device_class = FU_DEVICE_GET_CLASS(replacement);
+			fu_device_set_context(tuned, ctx);
+			fu_device_add_instance_id(tuned, p40_instance_ids[i]);
+			ret = fu_device_set_quirk_kv(tuned,
+						     FU_QUIRKS_REMOVE_DELAY,
+						     "120000",
+						     FU_CONTEXT_QUIRK_SOURCE_DB,
+						     &error);
+			g_assert_no_error(error);
+			g_assert_true(ret);
+			fu_genesys_usbhub_device_apply_p40_remove_delay(
+			    FU_GENESYS_USBHUB_DEVICE(tuned));
+			g_assert_cmpuint(fu_device_get_remove_delay(tuned), ==, 120000);
+
+			fu_device_set_context(replacement, ctx);
+			fu_device_add_instance_id(replacement, p40_instance_ids[i]);
+			ret = fu_device_set_quirk_kv(replacement,
+						     FU_QUIRKS_REMOVE_DELAY,
+						     "120000",
+						     FU_CONTEXT_QUIRK_SOURCE_DB,
+						     &error);
+			g_assert_no_error(error);
+			g_assert_true(ret);
+			device_class->replace(replacement, device);
+			g_assert_cmpuint(fu_device_get_remove_delay(replacement), ==, 120000);
+		}
 	}
 
 	{
 		g_autoptr(FuDevice) device = g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+		g_autoptr(FuDevice) donor = g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+		FuDeviceClass *device_class = FU_DEVICE_GET_CLASS(device);
 		fu_device_set_context(device, ctx);
 		fu_device_add_instance_id(device, "USB\\VID_17EF&PID_1159");
 		g_assert_false(
@@ -187,6 +248,15 @@ fu_genesys_usbhub_device_p40_quirk_activation_func(void)
 		    fu_device_has_private_flag(device,
 					       FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET));
 		g_assert_cmpuint(fu_device_get_specialized_gtype(device), ==, G_TYPE_INVALID);
+		fu_genesys_usbhub_device_apply_p40_remove_delay(FU_GENESYS_USBHUB_DEVICE(device));
+		g_assert_cmpuint(fu_device_get_remove_delay(device), ==, 5000);
+
+		fu_device_set_context(donor, ctx);
+		fu_device_add_instance_id(donor, "USB\\VID_17EF&PID_1159");
+		fu_device_set_remove_delay(device, 5000);
+		g_assert_nonnull(device_class->replace);
+		device_class->replace(device, donor);
+		g_assert_cmpuint(fu_device_get_remove_delay(device), ==, 5000);
 	}
 }
 

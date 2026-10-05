@@ -16,16 +16,19 @@ GType = FuGenesysUsbhubDevice
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
 Flags = p40-strict-project-check,hid-transport,exit-isp-before-reset
+RemoveDelay = 40000
 
 [USB\VID_17EF&PID_1153]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
 Flags = p40-strict-project-check,exit-isp-before-reset
+RemoveDelay = 40000
 
 [USB\VID_17EF&PID_1155]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
 Flags = p40-strict-project-check,exit-isp-before-reset
+RemoveDelay = 40000
 
 # Genesys Logic USB Hubs' HID
 
