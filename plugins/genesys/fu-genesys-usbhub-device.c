@@ -101,6 +101,7 @@ struct _FuGenesysUsbhubDevice {
 
 	gboolean is_gl352350;	      /* model with unique codesign mechanism */
 	gboolean flash_setup_pending; /* hid-transport hub waiting for its HID proxy */
+	guint16 hid_proxy_pid;	      /* the HID model that belongs to this hub, from the quirk */
 
 	FuCfiDevice *cfi_device;
 	guint32 flash_erase_delay;
@@ -140,18 +141,161 @@ struct _FuGenesysUsbhubDevice {
 
 G_DEFINE_TYPE(FuGenesysUsbhubDevice, fu_genesys_usbhub_device, FU_TYPE_USB_DEVICE)
 
+/*
+ * Decide whether a HID may act as the update channel of a hub. The HID must hang below the very
+ * same hub (same physical id, the mechanism the plugin already uses to link them), and the VID/PID
+ * pairing is only an auxiliary check. Anything that cannot be verified is refused.
+ */
+gboolean
+fu_genesys_usbhub_device_check_hid_binding(const gchar *hub_physical_id,
+					   guint16 hub_vid,
+					   guint16 expected_hid_pid,
+					   const gchar *hid_parent_physical_id,
+					   guint16 hid_vid,
+					   guint16 hid_pid,
+					   GError **error)
+{
+	if (hub_physical_id == NULL || hid_parent_physical_id == NULL) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "HID proxy topology cannot be verified");
+		return FALSE;
+	}
+	if (expected_hid_pid == 0) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "HID proxy model is not configured for this hub");
+		return FALSE;
+	}
+	if (g_strcmp0(hub_physical_id, hid_parent_physical_id) != 0) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "HID proxy is attached to %s, not to this hub (%s)",
+			    hid_parent_physical_id,
+			    hub_physical_id);
+		return FALSE;
+	}
+	if (hid_vid != hub_vid || hid_pid != expected_hid_pid) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "HID proxy %04x:%04x does not belong to this hub, expected %04x:%04x",
+			    hid_vid,
+			    hid_pid,
+			    hub_vid,
+			    expected_hid_pid);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/* a hub that needs its HID is not updatable until a verified proxy is bound */
 void
-fu_genesys_usbhub_device_set_proxy(FuGenesysUsbhubDevice *self, FuDevice *proxy)
+fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FuGenesysUsbhubDevice *self)
 {
 	g_return_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self));
-	g_return_if_fail(FU_IS_GENESYS_HUBHID_DEVICE(proxy));
+
+	if (!fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY))
+		return;
+	if (fu_device_get_proxy(FU_DEVICE(self), NULL) != NULL)
+		return;
+	fu_device_inhibit(FU_DEVICE(self),
+			  FU_GENESYS_USBHUB_INHIBIT_HID_PROXY,
+			  "The HID update interface is not bound to this hub yet");
+}
+
+gboolean
+fu_genesys_usbhub_device_verify_hid_proxy(FuGenesysUsbhubDevice *self,
+					  FuDevice *proxy,
+					  const gchar *hid_parent_physical_id,
+					  GError **error)
+{
+	g_return_val_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self), FALSE);
+	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
+
+	if (!fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY))
+		return TRUE;
+	if (proxy == NULL) {
+		g_set_error_literal(
+		    error,
+		    FWUPD_ERROR,
+		    FWUPD_ERROR_NOT_FOUND,
+		    "HID proxy is not bound, refusing to use USB control transfers");
+		return FALSE;
+	}
+	if (!fu_genesys_usbhub_device_check_hid_binding(fu_device_get_physical_id(FU_DEVICE(self)),
+							fu_device_get_vid(FU_DEVICE(self)),
+							self->hid_proxy_pid,
+							hid_parent_physical_id,
+							fu_device_get_vid(proxy),
+							fu_device_get_pid(proxy),
+							error)) {
+		g_prefix_error_literal(error, "HID proxy rejected: ");
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/* the gate in front of every entry that can change the hardware state */
+static gboolean
+fu_genesys_usbhub_device_ensure_hid_proxy(FuGenesysUsbhubDevice *self, GError **error)
+{
+	FuDevice *proxy;
+	g_autoptr(FuDevice) hid_parent = NULL;
+	g_autoptr(GError) error_local = NULL;
+
+	if (!fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY))
+		return TRUE;
+	proxy = fu_device_get_proxy(FU_DEVICE(self), NULL);
+	if (proxy == NULL)
+		return fu_genesys_usbhub_device_verify_hid_proxy(self, NULL, NULL, error);
+
+	/* resolved again on every use, so a moved or replugged HID is noticed */
+	hid_parent = fu_device_get_backend_parent(proxy, &error_local);
+	if (hid_parent == NULL) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "HID proxy topology cannot be resolved: %s",
+			    error_local->message);
+		return FALSE;
+	}
+	return fu_genesys_usbhub_device_verify_hid_proxy(self,
+							 proxy,
+							 fu_device_get_physical_id(hid_parent),
+							 error);
+}
+
+gboolean
+fu_genesys_usbhub_device_set_proxy(FuGenesysUsbhubDevice *self,
+				   FuDevice *proxy,
+				   const gchar *hid_parent_physical_id,
+				   GError **error)
+{
+	g_return_val_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self), FALSE);
+	g_return_val_if_fail(FU_IS_GENESYS_HUBHID_DEVICE(proxy), FALSE);
+	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
+
+	/* never bind an unverified HID: the hub stays inhibited */
+	if (!fu_genesys_usbhub_device_verify_hid_proxy(self,
+						       proxy,
+						       hid_parent_physical_id,
+						       error)) {
+		fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(self);
+		return FALSE;
+	}
 
 	fu_device_add_private_flag(FU_DEVICE(self), FU_DEVICE_PRIVATE_FLAG_REFCOUNTED_PROXY);
 	fu_device_add_private_flag(FU_DEVICE(self), FU_DEVICE_PRIVATE_FLAG_USE_PROXY_FOR_OPEN);
 	fu_device_set_proxy(FU_DEVICE(self), proxy);
+	fu_device_uninhibit(FU_DEVICE(self), FU_GENESYS_USBHUB_INHIBIT_HID_PROXY);
 
 	/* align usb max length(0xffff) to usb2 packet size(0x40) */
 	self->flash_rw_size = 0xffc0;
+	return TRUE;
 }
 
 static gboolean
@@ -1362,7 +1506,12 @@ fu_genesys_usbhub_device_get_info_from_project_ts(FuGenesysUsbhubDevice *self,
 static gboolean
 fu_genesys_usbhub_device_detach(FuDevice *device, FuProgress *progress, GError **error)
 {
-	return fu_genesys_usbhub_device_enter_isp_mode(FU_GENESYS_USBHUB_DEVICE(device), error);
+	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
+
+	/* refuse before ISP_ENTER is sent */
+	if (!fu_genesys_usbhub_device_ensure_hid_proxy(self, error))
+		return FALSE;
+	return fu_genesys_usbhub_device_enter_isp_mode(self, error);
 }
 
 static gboolean
@@ -1407,6 +1556,10 @@ fu_genesys_usbhub_device_dump_firmware(FuDevice *device, FuProgress *progress, G
 	gsize size;
 	g_autoptr(FuDeviceLocker) locker = NULL;
 	g_autofree guint8 *buf = NULL;
+
+	/* refuse before anything is sent, a dump also needs detach -> attach */
+	if (!fu_genesys_usbhub_device_ensure_hid_proxy(self, error))
+		return NULL;
 
 	/* a hid-transport hub has no flash info until its late setup has finished */
 	if (self->cfi_device == NULL) {
@@ -1558,6 +1711,9 @@ fu_genesys_usbhub_device_setup(FuDevice *device, GError **error)
 		return FALSE;
 	}
 	fu_genesys_usbhub_device_apply_p40_remove_delay(self);
+
+	/* not updatable until a verified HID proxy is bound; the setup below is unchanged */
+	fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(self);
 
 	/* validate by string token */
 	if (!fu_genesys_usbhub_device_validate_token(self, error))
@@ -1947,6 +2103,10 @@ fu_genesys_usbhub_device_prepare(FuDevice *device,
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
 	guint64 fw_max_size = fu_device_get_firmware_size_max(device);
 	g_autoptr(GArray) fw_types = g_array_new(FALSE, FALSE, sizeof(FuGenesysFwType));
+
+	/* refuse before the first command, prepare itself enters isp mode */
+	if (!fu_genesys_usbhub_device_ensure_hid_proxy(self, error))
+		return FALSE;
 
 	for (gint i = 0; i < FU_GENESYS_FW_TYPE_INSIDE_HUB_COUNT; i++) {
 		if (self->spec.fw_bank_capacity[i] == 0 ||		  /* unsupported fw type */
@@ -3138,6 +3298,10 @@ fu_genesys_usbhub_device_write_firmware(FuDevice *device,
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
 	g_autoptr(GPtrArray) imgs = fu_firmware_get_images(firmware);
 
+	/* refuse before ISP_ENTER and before anything is erased or written */
+	if (!fu_genesys_usbhub_device_ensure_hid_proxy(self, error))
+		return FALSE;
+
 	/* enter isp mode */
 	if (!fu_genesys_usbhub_device_enter_isp_mode(self, error))
 		return FALSE;
@@ -3239,6 +3403,14 @@ fu_genesys_usbhub_device_set_quirk_kv(FuDevice *device,
 		if (!fu_strtoull(value, &tmp, 0, G_MAXUINT32, FU_INTEGER_BASE_AUTO, error))
 			return FALSE;
 		self->flash_rw_size = tmp;
+
+		/* success */
+		return TRUE;
+	}
+	if (g_strcmp0(key, "GenesysHidProxyPid") == 0) {
+		if (!fu_strtoull(value, &tmp, 0, G_MAXUINT16, FU_INTEGER_BASE_AUTO, error))
+			return FALSE;
+		self->hid_proxy_pid = tmp;
 
 		/* success */
 		return TRUE;
@@ -3477,4 +3649,5 @@ fu_genesys_usbhub_device_class_init(FuGenesysUsbhubDeviceClass *klass)
 					FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK);
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT);
 	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET);
+	fu_device_register_private_flag(device_class, FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY);
 }

@@ -42,6 +42,7 @@ fu_genesys_plugin_constructed(GObject *obj)
 	fu_context_add_quirk_key(ctx, "GenesysUsbhubWriteRequest");
 	fu_context_add_quirk_key(ctx, "GenesysSupportDualBank");
 	fu_context_add_quirk_key(ctx, "GenesysSupportCodeSize");
+	fu_context_add_quirk_key(ctx, "GenesysHidProxyPid");
 	fu_context_add_quirk_key(ctx, "GenesysHubBank1Address");
 	fu_context_add_quirk_key(ctx, "GenesysHubBank2Address");
 	fu_context_add_quirk_key(ctx, "GenesysHubBankCapacity");
@@ -105,7 +106,16 @@ fu_genesys_plugin_device_added(FuPlugin *self, FuDevice *device)
 	} else {
 		g_autoptr(GError) error_local = NULL;
 
-		fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(parent), device);
+		/* the hub only gets this HID as its proxy when the binding is verified */
+		if (!fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(parent),
+							device,
+							fu_device_get_physical_id(usb_parent),
+							&error_local)) {
+			g_warning("hubhid not bound to hub, physical_id(%s): %s",
+				  fu_device_get_physical_id(usb_parent),
+				  error_local->message);
+			return;
+		}
 		fu_device_add_child(parent, device);
 
 		/* a hub that only answers vendor commands through its HID finishes setup now */
