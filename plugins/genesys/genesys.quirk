@@ -12,22 +12,28 @@ GType = FuGenesysUsbhubDevice
 # 1151 (GL3525-10) rejects Genesys vendor requests on the USB control pipe and only
 # answers through its HID, so its flash setup is finished once the HID proxy is bound.
 # All three Hubs leave ISP mode before the reset, like the Lenovo ISP tool does.
+# All three Hubs must be updated through their own HID (require-hid-proxy): without a
+# verified HID proxy the Hub is inhibited and never falls back to USB control transfers.
+# GenesysHidProxyPid is the HID model that must hang below that very Hub.
 [USB\VID_17EF&PID_1151]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
-Flags = p40-strict-project-check,hid-transport,exit-isp-before-reset
+Flags = p40-strict-project-check,hid-transport,require-hid-proxy,exit-isp-before-reset
+GenesysHidProxyPid = 0xF00F
 RemoveDelay = 40000
 
 [USB\VID_17EF&PID_1153]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
-Flags = p40-strict-project-check,exit-isp-before-reset
+Flags = p40-strict-project-check,require-hid-proxy,exit-isp-before-reset
+GenesysHidProxyPid = 0x4C41
 RemoveDelay = 40000
 
 [USB\VID_17EF&PID_1155]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
-Flags = p40-strict-project-check,exit-isp-before-reset
+Flags = p40-strict-project-check,require-hid-proxy,exit-isp-before-reset
+GenesysHidProxyPid = 0x4C42
 RemoveDelay = 40000
 
 # Genesys Logic USB Hubs' HID

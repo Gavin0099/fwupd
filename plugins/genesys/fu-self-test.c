@@ -293,6 +293,377 @@ fu_genesys_usbhub_device_p40_hid_quirk_func(void)
 	}
 }
 
+/*
+ * HID proxy safety gate. Expected values come from the verified P40WD-40 topology:
+ * L1 1151<->f00f, L2 1153<->4c41, L3 1155<->4c42. No test here touches hardware.
+ */
+typedef struct {
+	const gchar *hub_instance_id;
+	guint16 hub_pid;
+	guint16 hid_pid;
+} FuGenesysTestPair;
+
+static const FuGenesysTestPair fu_genesys_test_pairs[] = {
+    {"USB\\VID_17EF&PID_1151", 0x1151, 0xF00F},
+    {"USB\\VID_17EF&PID_1153", 0x1153, 0x4C41},
+    {"USB\\VID_17EF&PID_1155", 0x1155, 0x4C42},
+};
+
+#define FU_GENESYS_TEST_HUB_PHYSICAL_ID	  "usb:01:04"
+#define FU_GENESYS_TEST_OTHER_PHYSICAL_ID "usb:01:07"
+
+static FuContext *
+fu_genesys_test_context_new(void)
+{
+	g_autofree gchar *quirks_dir = g_strdup(SRCDIR);
+	g_autoptr(FuContext) ctx = g_object_new(FU_TYPE_CONTEXT, NULL);
+	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+	g_autoptr(GError) error = NULL;
+	gboolean ret;
+
+	g_type_ensure(FU_TYPE_GENESYS_HUBHID_DEVICE);
+	fu_context_add_quirk_key(ctx, "GenesysHidProxyPid");
+	fu_context_set_path(ctx, FU_PATH_KIND_DATADIR_QUIRKS, quirks_dir);
+	fu_context_add_flag(ctx, FU_CONTEXT_FLAG_NO_CACHE);
+	ret = fu_context_load(ctx, progress, FU_CONTEXT_LOAD_FLAG_NONE, &error);
+	g_assert_no_error(error);
+	g_assert_true(ret);
+	return g_steal_pointer(&ctx);
+}
+
+static FuDevice *
+fu_genesys_test_hub_new(FuContext *ctx, const gchar *instance_id, guint16 pid)
+{
+	FuDevice *device = g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+	fu_device_set_context(device, ctx);
+	fu_device_add_instance_id(device, instance_id);
+	fu_device_set_vid(device, 0x17EF);
+	fu_device_set_pid(device, pid);
+	fu_device_set_physical_id(device, FU_GENESYS_TEST_HUB_PHYSICAL_ID);
+	return device;
+}
+
+static FuDevice *
+fu_genesys_test_hid_new(guint16 vid, guint16 pid)
+{
+	FuDevice *device = g_object_new(FU_TYPE_GENESYS_HUBHID_DEVICE, NULL);
+	fu_device_set_vid(device, vid);
+	fu_device_set_pid(device, pid);
+	return device;
+}
+
+static void
+fu_genesys_test_assert_gate_error(GError *error, FwupdError code)
+{
+	g_assert_error(error, FWUPD_ERROR, code);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "HID proxy"));
+}
+
+/* every entry that can change hardware state must refuse before sending any command */
+static void
+fu_genesys_test_assert_entries_refuse(FuDevice *hub, FwupdError code)
+{
+	FuDeviceClass *klass = FU_DEVICE_GET_CLASS(hub);
+	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+	g_autoptr(FuFirmware) firmware = fu_firmware_new();
+
+	{
+		g_autoptr(GError) error = NULL;
+		g_assert_false(klass->detach(hub, progress, &error));
+		fu_genesys_test_assert_gate_error(error, code);
+	}
+	{
+		g_autoptr(GError) error = NULL;
+		g_assert_false(klass->prepare(hub, progress, FWUPD_INSTALL_FLAG_NONE, &error));
+		fu_genesys_test_assert_gate_error(error, code);
+	}
+	{
+		g_autoptr(GError) error = NULL;
+		g_assert_false(klass->write_firmware(hub,
+						     firmware,
+						     progress,
+						     FWUPD_INSTALL_FLAG_NONE,
+						     &error));
+		fu_genesys_test_assert_gate_error(error, code);
+	}
+	{
+		g_autoptr(GError) error = NULL;
+		g_autoptr(GBytes) blob = klass->dump_firmware(hub, progress, &error);
+		g_assert_null(blob);
+		fu_genesys_test_assert_gate_error(error, code);
+	}
+}
+
+/* acceptance 1: no proxy -> inhibited and every state-changing entry refuses */
+static void
+fu_genesys_usbhub_device_hid_proxy_missing_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+
+	for (guint i = 0; i < G_N_ELEMENTS(fu_genesys_test_pairs); i++) {
+		g_autoptr(FuDevice) hub =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[i].hub_instance_id,
+					    fu_genesys_test_pairs[i].hub_pid);
+		g_autoptr(GError) error = NULL;
+
+		g_assert_true(
+		    fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY));
+
+		/* what setup does for a hub that needs the HID; init() already made it updatable */
+		g_assert_true(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_UPDATABLE));
+		fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FU_GENESYS_USBHUB_DEVICE(hub));
+		g_assert_true(fu_device_has_inhibit(hub, "hid-proxy"));
+		g_assert_false(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_UPDATABLE));
+		g_assert_true(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_UPDATABLE_HIDDEN));
+
+		g_assert_false(
+		    fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+							      NULL,
+							      NULL,
+							      &error));
+		fu_genesys_test_assert_gate_error(error, FWUPD_ERROR_NOT_FOUND);
+
+		fu_genesys_test_assert_entries_refuse(hub, FWUPD_ERROR_NOT_FOUND);
+	}
+}
+
+/* acceptance 2: the right HID bound to its own hub is allowed (decision logic, no hardware) */
+static void
+fu_genesys_usbhub_device_hid_proxy_correct_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+
+	for (guint i = 0; i < G_N_ELEMENTS(fu_genesys_test_pairs); i++) {
+		g_autoptr(FuDevice) hub =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[i].hub_instance_id,
+					    fu_genesys_test_pairs[i].hub_pid);
+		g_autoptr(FuDevice) hid =
+		    fu_genesys_test_hid_new(0x17EF, fu_genesys_test_pairs[i].hid_pid);
+		g_autoptr(GError) error = NULL;
+
+		fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FU_GENESYS_USBHUB_DEVICE(hub));
+		g_assert_true(fu_device_has_inhibit(hub, "hid-proxy"));
+
+		g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								 hid,
+								 FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+								 &error));
+		g_assert_no_error(error);
+		g_assert_true(fu_device_get_proxy(hub, NULL) == hid);
+		g_assert_false(fu_device_has_inhibit(hub, "hid-proxy"));
+		g_assert_true(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_UPDATABLE));
+		g_assert_true(
+		    fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+							      hid,
+							      FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+							      &error));
+		g_assert_no_error(error);
+
+		/* a proxy whose parent cannot be resolved is not trusted (fail closed) */
+		fu_genesys_test_assert_entries_refuse(hub, FWUPD_ERROR_INVALID_DATA);
+	}
+}
+
+/* acceptance 3: a proxy that belongs to another hub, port or vendor is refused */
+static void
+fu_genesys_usbhub_device_hid_proxy_wrong_hub_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+
+	for (guint i = 0; i < G_N_ELEMENTS(fu_genesys_test_pairs); i++) {
+		for (guint j = 0; j < G_N_ELEMENTS(fu_genesys_test_pairs); j++) {
+			g_autoptr(FuDevice) hub =
+			    fu_genesys_test_hub_new(ctx,
+						    fu_genesys_test_pairs[i].hub_instance_id,
+						    fu_genesys_test_pairs[i].hub_pid);
+			g_autoptr(FuDevice) hid =
+			    fu_genesys_test_hid_new(0x17EF, fu_genesys_test_pairs[j].hid_pid);
+			g_autoptr(GError) error = NULL;
+			gboolean ret;
+
+			fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(
+			    FU_GENESYS_USBHUB_DEVICE(hub));
+			ret = fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								 hid,
+								 FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+								 &error);
+			if (i == j) {
+				g_assert_no_error(error);
+				g_assert_true(ret);
+				continue;
+			}
+			/* only the diagonal pairs are valid */
+			g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+			g_assert_false(ret);
+			g_assert_null(fu_device_get_proxy(hub, NULL));
+			g_assert_true(fu_device_has_inhibit(hub, "hid-proxy"));
+		}
+	}
+
+	/* the right HID model, but enumerated below a different port */
+	{
+		g_autoptr(FuDevice) hub =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[1].hub_instance_id,
+					    fu_genesys_test_pairs[1].hub_pid);
+		g_autoptr(FuDevice) hid = fu_genesys_test_hid_new(0x17EF, 0x4C41);
+		g_autoptr(GError) error = NULL;
+
+		fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FU_GENESYS_USBHUB_DEVICE(hub));
+		g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								  hid,
+								  FU_GENESYS_TEST_OTHER_PHYSICAL_ID,
+								  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+		g_assert_null(fu_device_get_proxy(hub, NULL));
+		g_assert_true(fu_device_has_inhibit(hub, "hid-proxy"));
+	}
+
+	/* the right model number from another vendor */
+	{
+		g_autoptr(FuDevice) hub =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[2].hub_instance_id,
+					    fu_genesys_test_pairs[2].hub_pid);
+		g_autoptr(FuDevice) hid = fu_genesys_test_hid_new(0x05E3, 0x4C42);
+		g_autoptr(GError) error = NULL;
+
+		g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								  hid,
+								  FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+								  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	}
+
+	/* an unresolvable parent or hub id cannot be verified, so it is refused */
+	{
+		g_autoptr(FuDevice) hub =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[0].hub_instance_id,
+					    fu_genesys_test_pairs[0].hub_pid);
+		g_autoptr(FuDevice) hid = fu_genesys_test_hid_new(0x17EF, 0xF00F);
+		g_autoptr(GError) error = NULL;
+
+		g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								  hid,
+								  NULL,
+								  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+		g_assert_null(fu_device_get_proxy(hub, NULL));
+	}
+}
+
+/* acceptance 4: a late HID, a replaced hub and a moved HID are verified again */
+static void
+fu_genesys_usbhub_device_hid_proxy_replug_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+	g_autoptr(FuDevice) hub = fu_genesys_test_hub_new(ctx,
+							  fu_genesys_test_pairs[2].hub_instance_id,
+							  fu_genesys_test_pairs[2].hub_pid);
+	g_autoptr(FuDevice) hid = fu_genesys_test_hid_new(0x17EF, 0x4C42);
+	g_autoptr(GError) error = NULL;
+
+	/* the hub is up before its HID: not allowed yet */
+	fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FU_GENESYS_USBHUB_DEVICE(hub));
+	g_assert_true(fu_device_has_inhibit(hub, "hid-proxy"));
+	fu_genesys_test_assert_entries_refuse(hub, FWUPD_ERROR_NOT_FOUND);
+
+	/* the HID shows up late: bound after verification only */
+	g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+							 hid,
+							 FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+							 &error));
+	g_assert_no_error(error);
+	g_assert_false(fu_device_has_inhibit(hub, "hid-proxy"));
+
+	/* the HID is re-enumerated below another port: verified again at the point of use */
+	g_assert_false(fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								 hid,
+								 FU_GENESYS_TEST_OTHER_PHYSICAL_ID,
+								 &error));
+	fu_genesys_test_assert_gate_error(error, FWUPD_ERROR_INVALID_DATA);
+	g_clear_error(&error);
+
+	/* the hub is replugged: the new object starts inhibited without the old proxy */
+	{
+		g_autoptr(FuDevice) hub_new =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[2].hub_instance_id,
+					    fu_genesys_test_pairs[2].hub_pid);
+		FuDeviceClass *klass = FU_DEVICE_GET_CLASS(hub_new);
+
+		klass->replace(hub_new, hub);
+		fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(
+		    FU_GENESYS_USBHUB_DEVICE(hub_new));
+		g_assert_null(fu_device_get_proxy(hub_new, NULL));
+		g_assert_true(fu_device_has_inhibit(hub_new, "hid-proxy"));
+		g_assert_false(fu_device_has_flag(hub_new, FWUPD_DEVICE_FLAG_UPDATABLE));
+		fu_genesys_test_assert_entries_refuse(hub_new, FWUPD_ERROR_NOT_FOUND);
+
+		/* the HID is bound to the new hub again only through verification */
+		g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_new),
+								  hid,
+								  FU_GENESYS_TEST_OTHER_PHYSICAL_ID,
+								  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+		g_clear_error(&error);
+		g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_new),
+								 hid,
+								 FU_GENESYS_TEST_HUB_PHYSICAL_ID,
+								 &error));
+		g_assert_no_error(error);
+		g_assert_false(fu_device_has_inhibit(hub_new, "hid-proxy"));
+	}
+}
+
+/* acceptance 5: hubs that do not ask for the gate (and 1153/1155 setup flags) are unchanged */
+static void
+fu_genesys_usbhub_device_hid_proxy_no_regression_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+	g_autoptr(FuDevice) hub = fu_genesys_test_hub_new(ctx, "USB\\VID_17EF&PID_1159", 0x1159);
+	g_autoptr(FuDevice) hid = fu_genesys_test_hid_new(0x05E3, 0x0102);
+	g_autoptr(GError) error = NULL;
+
+	/* a hub without the flag is never inhibited and never verified */
+	g_assert_false(fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY));
+	fu_genesys_usbhub_device_refresh_hid_proxy_inhibit(FU_GENESYS_USBHUB_DEVICE(hub));
+	g_assert_false(fu_device_has_inhibit(hub, "hid-proxy"));
+	g_assert_true(fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								NULL,
+								NULL,
+								&error));
+	g_assert_no_error(error);
+	g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+							 hid,
+							 "usb:unrelated",
+							 &error));
+	g_assert_no_error(error);
+	g_assert_true(fu_device_get_proxy(hub, NULL) == hid);
+
+	/* P40 setup flags are untouched; only the gate flag is new */
+	for (guint i = 0; i < G_N_ELEMENTS(fu_genesys_test_pairs); i++) {
+		g_autoptr(FuDevice) p40 =
+		    fu_genesys_test_hub_new(ctx,
+					    fu_genesys_test_pairs[i].hub_instance_id,
+					    fu_genesys_test_pairs[i].hub_pid);
+		g_assert_true(
+		    fu_device_has_private_flag(p40, FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY));
+		g_assert_true(
+		    fu_device_has_private_flag(p40,
+					       FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK));
+		g_assert_true(
+		    fu_device_has_private_flag(p40, FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET));
+		g_assert_cmpint(
+		    fu_device_has_private_flag(p40, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT),
+		    ==,
+		    i == 0);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -310,5 +681,15 @@ main(int argc, char **argv)
 			fu_genesys_usbhub_device_p40_quirk_activation_func);
 	g_test_add_func("/fwupd/genesys/quirk/p40-hid",
 			fu_genesys_usbhub_device_p40_hid_quirk_func);
+	g_test_add_func("/fwupd/genesys/hid-proxy/missing",
+			fu_genesys_usbhub_device_hid_proxy_missing_func);
+	g_test_add_func("/fwupd/genesys/hid-proxy/correct",
+			fu_genesys_usbhub_device_hid_proxy_correct_func);
+	g_test_add_func("/fwupd/genesys/hid-proxy/wrong-hub",
+			fu_genesys_usbhub_device_hid_proxy_wrong_hub_func);
+	g_test_add_func("/fwupd/genesys/hid-proxy/replug",
+			fu_genesys_usbhub_device_hid_proxy_replug_func);
+	g_test_add_func("/fwupd/genesys/hid-proxy/no-regression",
+			fu_genesys_usbhub_device_hid_proxy_no_regression_func);
 	return g_test_run();
 }
