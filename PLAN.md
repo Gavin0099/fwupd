@@ -2,7 +2,7 @@
 <!-- governance-baseline: overridable -->
 <!-- baseline_version: 1.0.0 -->
 
-> **最後更新**: 2026-10-12
+> **最後更新**: 2026-10-14
 > **Owner**: fwupd maintainers
 > **Freshness**: Sprint (7d)
 
@@ -14,7 +14,7 @@
 
 - [ ] Phase A : AI Governance onboarding
 - [ ] Phase B : P40WD-40 Genesys USB Hub firmware port investigation (S0-S7 evidence-first; runtime/hardware validation remains gated)
-- [ ] Phase C : P34WD-40 Genesys USB Hub support, Hub part only (slices C0-C9; implementation starts only after the P34WD-40 board arrives)
+- [ ] Phase C : TPV P34WD-40 Genesys USB Hub support, Hub part only, by extending `plugins/genesys` (slices TPV-00..TPV-10, gates G0-G4; the former C0-C11 numbering is superseded, see the mapping; no hardware write, no formal TPV quirk until G0/G1; offline slices TPV-02, TPV-03A and TPV-06A are done)
 
 ## Active Sprint
 
@@ -36,11 +36,76 @@ Phase B (P40WD-40 investigation — S1 raw PROJECT representation is confirmed f
 - [ ] S1 (PARTIALLY COMPLETE / LIVE-FWUPD-IDENTITY-PENDING): `GLUpdateTool.exe info -hu --uss=d` logged three distinct runtime PROJECT strings and classified the devices as GL3525/GL3523/GL3523. Standard string descriptor `0x8A` was captured for all three: each has `bLength=0x20`, type `0x03`, and 15 UTF-16LE ASCII code units with zero high bytes. After removing the descriptor header and projecting each code unit to its low byte, the resulting 15 bytes exactly match the mapped v0.0.0.39 payload fields. Q1 is yes; Q2 is confirmed for these three captures. Q3 has three distinct UUIDv5 PROJECT GUIDs and expected Instance IDs calculated offline, but live fwupd enumeration was not run. Q4 is the observed nested path: root USB port 8 -> upstream `1D5C:5801` -> `17EF:1151` port 4 -> `17EF:1153` port 1 -> `17EF:1155` port 2. The USB `bcdDevice` values (`8009/8106/8207`) are descriptor revisions, not the IC identities. NOT CLAIMED: live fwupd GUID output, other firmware revisions' descriptor representation, or hardware-update correctness.
 - [x] S2b-1 P40-specific compatibility gate: the three confirmed P40 Hub VID/PID quirks enable a private strict-policy flag; `check_firmware` requires exact 15-byte PROJECT and raw six-byte mask IC matches, and fails closed for missing/invalid identity data. Added tests for the 3x3 P40 match matrix, IC mismatch, missing/short data, non-P40 bypass, and all three VID/PID quirk activations. Focused build/test and offline payload parsing are recorded in `artifacts/evidence/test-results/genesys-p40-project-gate-20260924.json`. This policy is not enabled for generic Genesys devices. S3-S7, live fwupd identity/topology, active-bank cross-check, runtime behavior validation, and any hardware/firmware write remain unverified or gated.
 
-Phase C (P34WD-40, Hub part only; owner decision 2026-10-12: Scaler/PD plugins, an anchor hub and the Scaler `f00f` question are out of scope; implementation starts only after the board arrives; evidence-first, no hardware write without renewed explicit authorization):
+Phase C (TPV P34WD-40, Hub part only; owner decisions: 2026-10-12 Scaler/PD plugins and an anchor hub are out of scope, evidence-first, no hardware write without renewed explicit authorization; 2026-10-14 extend `plugins/genesys` additively and quirk/flag-gated instead of a new plugin, PDF v2 is the primary source, P34 also has three hubs; implementation of device support waits for the board):
+
+Source and identity rules (2026-10-14, from the review of this plan; the review was not itself checked against hardware):
+
+- The biggest risk is device-identity assumptions, not the ISP code. Do not copy the P40 three-tier PID/HID mapping (1151/1153/1155 with f00f/4c41/4c42) to P34. Customer topology 1121 (root; f00f and PD `0bda:1299` below) > 1122 (4c41) > 1123 (4c42) is an unverified customer claim.
+- Source conflicts that stay open: the PDF labels A as "P40WD-40" and B as `1151` (live evidence says 1151 is P40, so TPV B is likely P40 hardware); the PDF v2 parent direction (Scaler is the parent) conflicts with the original PPT p8 (Hub is the parent); the PDF says f00f is the Scaler and only `4c41` updates the hub (4c42 out of scope) while the owner says P34 has three hubs.
+- Shared HID VID/PID `17ef:f00f/4c41/4c42` can occur on several models; a HID may only ever become the proxy of the hub it hangs below (physical id), never by VID/PID alone.
+- Unknown PIDs are not claimed by genesys; adding a quirk is what makes fwupd start talking to a device, so no TPV quirk is added before G0 and G1.
+
+Gates:
+
+- **G0 Scope and identity confirmation (owner/customer; no board; blocks TPV-03B and everything after it)**: confirm the TPV Hub scope - three Genesys hubs or only the hub behind `17EF:4C41` (three payloads alone do not prove three GL hubs); for each update target the vendor, IC and VID/PID; the A/B to product mapping; HID role of f00f; parent direction. Unanswered items stay listed as open. Owner answers 2026-10-14 (not yet verified on hardware): all three hubs are Genesys Logic; scope is the USB2.0 side only for now; IC and PROJECT wait for the machine; the target machine is P34WD-40 per the PDF; L1 PID 1121 seen as `GenesysLogic USB2.1 Hub` (owner-supplied line, source unrecorded). Owner follow-up 2026-10-14: P34WD-40 is the primary target (the PDF A/B labels do not override it); working assumption for the parent direction is that the Hub is the parent (original PPT p8; the PDF v2 Scaler-parent reading is set aside, not disproved); the f00f role is deferred (not needed for the Hub-only scope). Still open: 1122/1123 PIDs and the actual parent/child order, to be read from the machine in G1.
+- **G1 Passive inventory (board; read-only OS level only: `lsusb -t`, `lsusb -v`, `udevadm info`, sysfs; no fwupd setup, no vendor request)**: records the real PIDs, topology, descriptors, HID nodes and physical IDs per hub; a baseline snapshot is taken first. Unlocks TPV-03B and TPV-06B.
+- **G2 Active probe approval (owner, per run)**: any `fwupdtool get-devices` that reaches Genesys setup is an ISP state transition (see TPV-06A), so it needs a baseline, an owner-accepted mode transition and a recovery path (TPV-06C).
+- **G3 Write authorization (owner, per step and per hub)**: flash dump first, payload source, order justified by reset evidence, power cycle and baseline after each hub. Nothing is written without it.
+- **G4 Pre-write compatibility and safety (offline; before any hardware write)**: the correct firmware matches; a wrong model, wrong PROJECT or wrong IC is rejected; unknown or unreadable identity is rejected and never falls back to a shared VID/PID match; `check_firmware()` is not relaxed by any TPV flag; the reset/replug flow and recovery conditions are reviewed. Open items found by TPV-03A: G-A blank-but-identical PROJECT/IC is accepted, G-B the strict check is bound to the P40-named flag and a TPV entry without it gets no PROJECT check, G-C a hub without `require-hid-proxy` accepts any HID. All three must be resolved (or accepted by the owner) before TPV-08.
+
+Slices (status as of 2026-10-14):
+
+| Slice | Content | Status |
+| --- | --- | --- |
+| TPV-00 | Scope, sources, matrix, architecture decision (`TPV-COMPATIBILITY-MATRIX.md`, `TPV-ARCHITECTURE-DECISION.md`) | DONE |
+| TPV-01 | Gap analysis against the Genesys hub flow | CONDITIONALLY DONE (identity assumptions open, see G0) |
+| TPV-02 | Regression baseline and coverage matrix | DONE offline 2026-10-14: baseline `genesys-self-test` 11/11, `fu-engine-test` OK; emulation tests NOT RUN; coverage gaps listed in the evidence file |
+| TPV-03A | Offline synthetic tests (GUID/PROJECT/wrong-model rejection, shared-HID negatives), no formal quirk | DONE offline 2026-10-14: 5 new self-tests, 16/16, 9/10 mutants killed |
+| TPV-03B | Add the dedicated TPV quirk, flags and tests after hardware confirmation | WAIT G0 + G1 |
+| TPV-04 | Offline parse of the P34 payloads (PROJECT, IC, hash) | DONE offline 2026-10-14 (3 payloads parsed, hashes recorded; L2 and L3 share the same mask identity and differ only by PROJECT string and version; offline cabinet build and re-parse PASS with placeholder GUIDs (not device IDs); evidence `artifacts/evidence/test-results/tpv04/p34-payload-parse-20261014.txt`; binaries kept outside the repo) |
+| TPV-05 | Hardware passive inventory | WAIT board (G1); read-only script and checklist ready: `artifacts/evidence/tpv05/g1-passive-inventory.sh` (dry-run on this host only; no fwupd tool, no write) |
+| TPV-06A | Static command review of `setup()` and the vendor command table | DONE 2026-10-14: setup sends `ISP_ENTER` and flash reads and never `ISP_EXIT` (evidence file) |
+| TPV-06B | Active probe (`get-devices`) after approval | WAIT G1 + G2 |
+| TPV-06C | ISP-state recovery and re-enumeration verification | WAIT TPV-06B |
+| TPV-07 | Scaler Parent / whole-device coordination | HOLD (see below) |
+| TPV-08A / 08B | Authorized writes, per hub, order decided by reset evidence (tail-first 1123 > 1122 > 1121 is a test candidate only, not mandatory) | WAIT G3 + G4 + TPV-09A |
+| TPV-09A | Offline regression before any write; mandatory before TPV-08 (rerun TPV-02 set plus TPV-03A) | WAIT |
+| TPV-09B | Post-write regression, two docks attached | WAIT TPV-08 |
+| TPV-10 | Upstream-ready commits and MR last; handle the P40 fork dependency (`49583adc8`, `p40wd40-hid-proxy-gate`) | WAIT; no auto merge, no upstream MR |
+
+TPV-07 stays on HOLD because the PDF v2 (Scaler is the parent) and the PPT p8 (Hub is the parent) disagree. It must not block independent GL Hub development. `ParentGuid` alone cannot ensure the correct physical dock when two docks are attached, so GL Hub update capability and TPV whole-device coordination are separate acceptance items.
+
+TPV-06A finding (code only, nothing executed): once a quirk makes fwupd claim a hub, `fu_genesys_usbhub_device_setup()` reaches `setup_flash()` -> `enter_isp_mode()` -> vendor request `0x81` (or `0xA1` with codesign) value `ISP_ENTER`, polls register 5, then reads the flash ID with up to five vendor reads; `ISP_EXIT` is only sent in `attach()` before the reset and only with `exit-isp-before-reset`. So `get-devices` is a mode transition, not passive inventory. Still unknown for P34: whether the hubs leave ISP mode on their own and what it does to downstream hubs.
+
+P40 special flags are reference only; each flag needs its own applicability reason for TPV, do not copy the set:
+
+| P40 flag / setting | P40 basis | TPV applicability |
+| --- | --- | --- |
+| `p40-strict-project-check` | generic PROJECT + mask IC compare; P40-named flag and messages | logic reusable; decide a rename or a TPV flag with the same behaviour (G4 G-B); only after PROJECT/IC are known (TPV-04) |
+| `hid-transport` | 1151 only: USB control pipe stalls, answers through its HID | hypothesis; unknown for P34 until TPV-05 and TPV-06B; do not set by default |
+| `require-hid-proxy` + `GenesysHidProxyPid` | safety gate: hub inhibited without a verified HID below the same hub | reusable gate for every TPV hub; the HID PID per hub comes from G1, never inferred |
+| `exit-isp-before-reset` | matches the Lenovo CLI teardown; P40 write result not verified | hypothesis; depends on TPV-06C and reset evidence |
+| `RemoveDelay = 40000` | P40 empirical (one pass, one environment-limited failure) | unknown for P34; keep the default until measured |
+| `NO_GENERIC_GUIDS` (code, not a quirk flag) | already drops the generic VID/PID GUID | applies unchanged |
+
+Mapping of the superseded numbering: C0 -> TPV-00/01; C1 -> TPV-05, TPV-06B; C2 -> TPV-03B; C3 -> TPV-03B (HID-before-hub); C4 -> TPV-03B, TPV-07; C5 -> TPV-06C, TPV-08; C6 -> G4; C7 -> TPV-04, TPV-10; C8 -> TPV-08A/B; C9 -> TPV-10; C10 -> G0; C11 -> TPV-03A, TPV-03B. The C0-C11 bullets below are kept as detail reference only; where they disagree with the gates and slices above, the gates and slices win.
+
+Legacy C0-C11 detail (superseded numbering):
 
 - [x] C0 Scope and gap analysis (offline, 2026-10-12): customer TPV LVFS design (PDF read; PPTX `Lenovo_LVFS_1012_v0.3-For+P34WD-40` unreadable, only 128 bytes received) compared with the Genesys Hub flow; recorded in `memory/2026-10-12.md`. The topology 1121/1122/1123 belonging to P34 is an inference, not verified. P34 payloads (offline, see `memory/evidence/p40-s3-live-nuc-20260929.md`): L1 GL3525 v86.17, L2/L3 GL3523-50 v87.10/88.10, PROJECT `LNV_P34WD40_L10/L20/L30`; the files exist only on Windows `E:` and are not on this machine.
+Customer requirement to slice map (sources: TPV LVFS v2 PDF, flow diagram, maintainer suggestion; suggested order C10, C1, C2, C11, C3, C4, C6, C5, C7, C8, C9):
+
+- Topology 1121/1122/1123 and hub HID `4c41` (parent 1122, depth 2): C10, C1.
+- Defence 1, composite instance ID with the upstream hub PID: C11.
+- Defence 2, `no-auto-instance-ids`: the Hub plugin already sets `NO_GENERIC_GUIDS`; confirm in C11.
+- Defence 3, optional `requires depth`, and one cab per model: C7 (decision D1).
+- Defence 4, runtime parent PID check: C6, together with the `49583adc8` HID gate.
+- HID device matched to its parent hub (maintainer correction 2026-10-13): C3, C4.
+- `install-parent-first` and the owner order L3, L2, L1: C4, C5.
+- Not covered: root `--force` bypasses every metadata condition (the customer document accepts this); C6 only proves that the PROJECT check still rejects under `--force`.
+
 - [ ] C1 Read-only inventory on the P34 board (BLOCKED: board): `lsusb -t`, `lsusb -v` of the hubs and HIDs, `udevadm info` of each hidraw, one `fwupdtool --plugins genesys get-devices` run after a baseline snapshot. No firmware write; `get-devices` setup may enter ISP mode, so each run needs a baseline and an owner-accepted mode transition as in S3. Acceptance keeps four separate layers: OS enumeration, physical topology, fwupd identity (GType, GUIDs, PROJECT, version, physical ID), Hub-to-HID link. Fills the unknown P34 PIDs and the missing 1151-style live GUID evidence.
-- [ ] C2 P34 quirk entries and flags (BLOCKED: C1 and a customer decision on which hubs fwupd must update; the customer document names only the hub behind `4c41`): VID/PID entries, `hid-transport`, `require-hid-proxy` with `GenesysHidProxyPid`, the strict PROJECT policy flag (the check compares device and firmware PROJECT generically), `exit-isp-before-reset`, `RemoveDelay`. No PID or flag is guessed. Add offline self-tests for each quirk activation.
+- [ ] C2 P34 quirk entries and flags (BLOCKED: C1 and C10, the customer decision on which hubs fwupd must update; the customer document names only the hub behind `4c41`): VID/PID entries, `hid-transport`, `require-hid-proxy` with `GenesysHidProxyPid`, the strict PROJECT policy flag (the check compares device and firmware PROJECT generically), `exit-isp-before-reset`, `RemoveDelay`. No PID or flag is guessed. Add offline self-tests for each quirk activation.
 - [ ] C3 HID-before-hub enumeration (BLOCKED: start after board per owner): an unmatched HID is removed in `fu_genesys_plugin_device_added()` with no retry. Write a failing test first, then retry or defer the match. Must keep the `49583adc8` gate semantics.
 - [ ] C4 HID-to-parent-hub link and install order (BLOCKED: C1): the HID is already a logical child of its hub (`fu_device_add_child()` in `fu_genesys_plugin_device_added()`), and the `49583adc8` gate re-checks the physical parent before writes; confirm both with `get-devices` on the board. Separate and optional: a Hub-to-Hub logical tree (`ParentGuid` or `AUTO_PARENT_CHILDREN`; Genesys sets neither today) is needed only for install order, not for the HID/parent check. fwupd orders children first by default (`fu_device_list_depsolve_order`), which matches the owner order L3, L2, L1; do not set `INSTALL_PARENT_FIRST` for hubs. Offline test in the `fu-engine-test` style.
 - [ ] C5 Reset policy (BLOCKED: C1 and explicit authorization, because a hub reset is a device state change): `attach` always resets and sets `WAIT_FOR_REPLUG`. Hypothesis to test: L2/L3 skip the reset and only L1 resets after the last write. Open: whether an L1 reset also restarts L2/L3 chips; how the engine treats an unchanged version after a no-replug attach; a policy for installs without L1 (for example mark the device as needing a reboot or shutdown). Decide between per-hub reset (current) and deferred reset only after a read-only check of what an L1 reset does to L2/L3.
@@ -48,6 +113,8 @@ Phase C (P34WD-40, Hub part only; owner decision 2026-10-12: Scaler/PD plugins, 
 - [ ] C7 Hub GUID, metainfo and CAB (BLOCKED: C1, because GUIDs need live `get-devices`; also needs owner decision D1): one cabinet with a component per hub, `provides` equal to the live PROJECT GUID, `requires` fwupd version; build with `fwupdtool build-cabinet` and re-parse offline; verify the cabinet GUID equals the live GUID. No install. Earlier draft metainfo/CAB files are lost; the structure is in `memory/evidence/p40-s3-live-nuc-20260929.md`. D1 (maintainer suggestion: `enforce-requires` plus a parent requirement for devices with generic GUIDs; HID VID/PID can repeat across models, so the parent hub is what tells models apart): (A) keep the Hub as cab target and add a child requirement (`<firmware depth="-1">` = the hub must have a child HID with the given GUID); or (B) make the HID the cab target with `<firmware depth="1">` = parent hub GUID, which changes the Genesys architecture. Unverified: the actual HID GUIDs (never recorded), P34 HID PIDs, and whether `depth="-1"` is usable for our hubs.
 - [ ] C8 Hardware write validation (GATED: C1-C7, explicit per-step owner authorization): flash dump of each hub before any write, payload source decision (P34 files are on Windows `E:`; v86.17+ is newer than any installed version seen), order L3, L2, L1, power cycle and baseline after each hub. P40 L2/L3 real updates previously ended in attach/replug failure; P34 behavior is unknown.
 - [ ] C9 Publication decision (owner): commit `49583adc8` and the P34 work live in the fork only; whether the Hub part goes to upstream fwupd, and the customer expectation that end users get it through LVFS, are undecided.
+- [ ] C10 Questions to customer and maintainer (NOT board-gated; can run now; no code): customer: confirm that topology 1121/1122/1123 belongs to P34, which hubs fwupd must update (the document names only the hub behind `4c41`). The anchor hub 1121 PID is out of scope per the 2026-10-12 owner decision, so it is not an open question. Maintainer: the plugin does not set PVID/PPID instance-ID keys and `provides` does not use them, so is a parent-PID instance ID wanted at all; choose D1 option A or B (see C7). Acceptance: written answers recorded in a canonical memory record; unanswered items stay listed as open.
+- [ ] C11 Model identification (BLOCKED: C1 and C10): decide whether Hub identity needs the upstream hub PID in the instance ID (defence 1) beyond the existing `NO_GENERIC_GUIDS` and the strict PROJECT check (defence 2). `fu_device_build_instance_id_full()` adds no ID when any key value is unset, so an unread parent PID must not silently drop the ID. Acceptance: a P34 hub and a hub of another model with the same VID/PID produce different GUIDs, shown by offline test, then confirmed with `get-devices`.
 
 ## Backlog
 
@@ -99,6 +166,8 @@ Phase C (P34WD-40, Hub part only; owner decision 2026-10-12: Scaler/PD plugins, 
 - 2026-09-30: Kept the upstream-bound Genesys work separable: branch `genesys-p40wd40-upstream` at `62ba6cde5` carries only the two `plugins/genesys` commits over `bd47f8335`; governance and evidence files stay on `main`.
 - 2026-10-05 (S5 software closeout, local commits only): The 2026-10-01 L2 attempt waited only 5000 ms and failed with `rc=3` at attach. A one-shot L3 write (USB2 `1155` + HID proxy `4C42`) then returned `rc=0` with a 25.6 s recovery, at the effective 40000 ms window; the requested 120000 ms was silently overridden by a code pin in `apply_p40_remove_delay()`. Fixed so a quirk `RemoveDelay` is authoritative and 40000 ms is only a fallback when the delay is still the 5000 ms default (an explicit quirk of 5000 is treated as unset). The `fwupdtool` install now de-duplicates the selected device. Local commits `32ac6525e`, `832e73fe7`, `1001cd140`; container `genesys-self-test` and `fu-engine-test` pass (receipt `artifacts/evidence/test-results/receipt-s5-closeout-20261005.json`). Not claimed: hardware reliability (40 s window 1 pass, 1 environment-limited fail), firmware content change (inconclusive), USB3/`1154` (S6-A not opened), release readiness. Nothing is pushed; no upstream MR. The `genesys-p40wd40-upstream` branch does not yet carry the new Genesys commit.
 - 2026-10-12 (P34WD-40 scope, owner decisions): The customer model is P34WD-40, not P40WD-40, and only the Hub part is in scope; implementation waits for the board. The customer's per-model isolation design (identity, cleanup, `requires`, execution gate) is mostly expressible with existing fwupd mechanisms (`ParentGuid`, `AUTO_PARENT_CHILDREN`, `requires depth`, `NO_GENERIC_GUIDS`), verified only by source reading and not tried on any hub. For hubs, `INSTALL_PARENT_FIRST` is not wanted because fwupd's default is child-first (L3, L2, L1). Candidate reset policy: L2/L3 do not reset and L1 resets last; unverified on hardware. Commit `49583adc8` and `3d25c620a` (memory record) are pushed to `Gavin0099/fwupd` branch `p40wd40-hid-proxy-gate`; no PR, merge or upstream MR. Not claimed: any P34 behavior, GUID, CAB match, hardware reliability or release readiness.
+- 2026-10-14 (owner G0 answers): three hubs are all Genesys Logic, USB2.0 side only, IC/PROJECT wait for the machine, P34WD-40 is the primary target, the Hub is assumed to be the parent, f00f role deferred. All unverified until G1 reads the machine; no quirk, no code change, gates unchanged.
+- 2026-10-14 (TPV gates and slices rewritten; offline execution): Applied the review of the Phase C plan: added G0-G4, split TPV-03 into 03A/03B, TPV-06 into 06A/06B/06C, TPV-08 into 08A/08B and TPV-09 into 09A/09B, kept TPV-07 on HOLD, added the P40 flag applicability table. Executed TPV-02 (baseline `genesys-self-test` 11/11, `fu-engine-test` OK, emulation NOT RUN, coverage matrix with gaps), TPV-03A (5 synthetic self-tests, 16/16, mutation 9/10 killed, the survivor is an equivalent mutant) and TPV-06A (static: setup sends `ISP_ENTER`). Found three G4 gaps (G-A blank-but-identical PROJECT/IC accepted, G-B P40-bound strict flag, G-C unflagged hub accepts any HID); no production code changed. Evidence: `artifacts/evidence/test-results/tpv02/TPV-02-03A-06A-evidence-20261014.md`. Not claimed: any P34 behaviour, hardware readiness, gate pass, emulation status.
 - 2026-09-21: Adopted the canonical framework as a git submodule so the framework source and parent-repository pin are reviewable together.
 - 2026-09-21: Preserved the existing Copilot instructions and merged only the framework-managed block through the official installer.
 
@@ -111,7 +180,7 @@ Phase C (P34WD-40, Hub part only; owner decision 2026-10-12: Scaler/PD plugins, 
 
 <!-- Optional: track identified risks and mitigation status -->
 
-- Phase C (P34WD-40): the board is not available, so PIDs, topology, f00f/4c41/4c42 roles, GUIDs and attach/replug behavior are unknown; P40 evidence does not transfer. Resetting only the upstream hub may not restart downstream hubs. A HID enumerated before its hub is removed without retry.
+- Phase C (TPV P34WD-40): offline results (TPV-02/03A/06A) cover synthetic identities only and say nothing about real P34 hardware. Open identity risks: Hub scope (three hubs or only `4c41`), A/B to product mapping, parent direction, f00f role. Open code gaps G-A..G-C (G4). `get-devices` on a claimed hub changes ISP state. Emulation tests and the HP/Google/other-Lenovo populations were not exercised in this baseline. The board is not available, so PIDs, topology, f00f/4c41/4c42 roles, GUIDs and attach/replug behavior are unknown; P40 evidence does not transfer. Resetting only the upstream hub may not restart downstream hubs. A HID enumerated before its hub is removed without retry.
 
 - Runtime lifecycle execution in a real Copilot session and hardware behavior are not proven by the onboarding smoke; keep those claims bounded.
 - Full fwupd build and test validation requires the documented privileged container and may be unavailable on this Windows host.
