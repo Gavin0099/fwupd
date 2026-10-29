@@ -4,6 +4,7 @@
 #include "fu-device-private.h"
 #include "fu-genesys-hubhid-device.h"
 #include "fu-genesys-usbhub-device.h"
+#include "fu-genesys-usbhub-firmware.h"
 
 static void
 fu_genesys_usbhub_device_project_compatibility_matrix_func(void)
@@ -664,6 +665,307 @@ fu_genesys_usbhub_device_hid_proxy_no_regression_func(void)
 	}
 }
 
+/*
+ * Offline identity tests. Every PROJECT string, IC type and PID below is synthetic test data,
+ * not a statement about real hardware. Only an exact PROJECT + mask IC match is accepted,
+ * anything else, including unknown identity, is refused.
+ */
+typedef struct {
+	const gchar *project;
+	const gchar *ic;
+} FuGenesysTestIdentity;
+
+static const FuGenesysTestIdentity fu_genesys_test_identities[] = {
+    {"LNV_P40WD40_L10", "352510"},
+    {"LNV_P40WD40_L20", "352350"},
+    {"LNV_P40WD40_L30", "352350"},
+    /* synthetic: the IC types are invented */
+    {"LNV_P34WD40_L10", "352520"},
+    {"LNV_P34WD40_L20", "352360"},
+    {"LNV_P34WD40_L30", "352360"},
+    /* synthetic: two models share one IC type, so the PROJECT string alone must separate them */
+    {"SYN_COLLIDE_A10", "999001"},
+    {"SYN_COLLIDE_B10", "999001"},
+};
+
+/* no two identities accept each other's firmware, including identities that share an IC type */
+static void
+fu_genesys_usbhub_device_identity_cross_model_func(void)
+{
+	for (guint d = 0; d < G_N_ELEMENTS(fu_genesys_test_identities); d++) {
+		g_autoptr(GBytes) dev =
+		    g_bytes_new_static(fu_genesys_test_identities[d].project,
+				       strlen(fu_genesys_test_identities[d].project));
+		for (guint f = 0; f < G_N_ELEMENTS(fu_genesys_test_identities); f++) {
+			g_autoptr(GBytes) fw =
+			    g_bytes_new_static(fu_genesys_test_identities[f].project,
+					       strlen(fu_genesys_test_identities[f].project));
+			g_autoptr(GError) error = NULL;
+			gboolean ret = fu_genesys_usbhub_device_check_project_compatibility(
+			    TRUE,
+			    dev,
+			    fu_genesys_test_identities[d].ic,
+			    fw,
+			    fu_genesys_test_identities[f].ic,
+			    &error);
+			if (d == f) {
+				g_assert_no_error(error);
+				g_assert_true(ret);
+			} else {
+				g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+				g_assert_false(ret);
+			}
+		}
+	}
+
+	/* same PROJECT, other mask IC: refused; same mask IC, other PROJECT: refused */
+	{
+		g_autoptr(GBytes) project = g_bytes_new_static("LNV_P34WD40_L20", 15);
+		g_autoptr(GBytes) other = g_bytes_new_static("LNV_P40WD40_L20", 15);
+		g_autoptr(GError) error_ic = NULL;
+		g_autoptr(GError) error_project = NULL;
+
+		g_assert_false(fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+										    project,
+										    "352360",
+										    project,
+										    "352350",
+										    &error_ic));
+		g_assert_error(error_ic, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+		g_assert_false(
+		    fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+									 project,
+									 "352350",
+									 other,
+									 "352350",
+									 &error_project));
+		g_assert_error(error_project, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+	}
+}
+
+/* unknown or malformed identity is refused on both sides; there is no fallback to a looser match */
+static void
+fu_genesys_usbhub_device_identity_unknown_identity_func(void)
+{
+	const gsize lengths[] = {0, 1, 14, 16, 64};
+	g_autoptr(GBytes) good = g_bytes_new_static("LNV_P34WD40_L20", 15);
+	g_autoptr(GError) error_ok = NULL;
+
+	/* control: identical identities are accepted, so refusals below are not fixture noise */
+	g_assert_true(fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+									   good,
+									   "352360",
+									   good,
+									   "352360",
+									   &error_ok));
+	g_assert_no_error(error_ok);
+
+	for (guint i = 0; i < G_N_ELEMENTS(lengths); i++) {
+		g_autofree guint8 *buf = g_malloc(lengths[i] + 1);
+		g_autoptr(GBytes) odd = NULL;
+		g_autoptr(GError) error_dev = NULL;
+		g_autoptr(GError) error_fw = NULL;
+
+		/* g_bytes_new() copies its input: fill the buffer first */
+		memset(buf, 'X', lengths[i] + 1);
+		odd = g_bytes_new(buf, lengths[i]);
+		g_assert_cmpuint(g_bytes_get_size(odd), ==, lengths[i]);
+
+		g_assert_false(fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+										    odd,
+										    "352360",
+										    good,
+										    "352360",
+										    &error_dev));
+		g_assert_error(error_dev, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+		g_assert_false(fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+										    good,
+										    "352360",
+										    odd,
+										    "352360",
+										    &error_fw));
+		g_assert_error(error_fw, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+	}
+
+	/* mask IC type that is not six characters */
+	{
+		const gchar *bad_ics[] = {"", "35236", "3523600"};
+		for (guint i = 0; i < G_N_ELEMENTS(bad_ics); i++) {
+			g_autoptr(GError) error_dev = NULL;
+			g_autoptr(GError) error_fw = NULL;
+			g_assert_false(
+			    fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+										 good,
+										 bad_ics[i],
+										 good,
+										 "352360",
+										 &error_dev));
+			g_assert_error(error_dev, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+			g_assert_false(
+			    fu_genesys_usbhub_device_check_project_compatibility(TRUE,
+										 good,
+										 "352360",
+										 good,
+										 bad_ics[i],
+										 &error_fw));
+			g_assert_error(error_fw, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+		}
+	}
+}
+
+/* the strict check is the flag, and no other flag combination relaxes it in check_firmware() */
+static void
+fu_genesys_usbhub_device_identity_check_firmware_not_relaxed_func(void)
+{
+	const gchar *others[] = {
+	    FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT,
+	    FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY,
+	    FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET,
+	};
+
+	for (guint mask = 0; mask < (1u << G_N_ELEMENTS(others)); mask++) {
+		g_autoptr(FuDevice) device = g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+		g_autoptr(FuFirmware) firmware = fu_firmware_new();
+		g_autoptr(FuFirmware) genesys_fw =
+		    g_object_new(FU_TYPE_GENESYS_USBHUB_FIRMWARE, NULL);
+		g_autoptr(GError) error = NULL;
+		g_autoptr(GError) error_genesys = NULL;
+		FuDeviceClass *klass = FU_DEVICE_GET_CLASS(device);
+
+		fu_device_add_private_flag(device, FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK);
+		for (guint i = 0; i < G_N_ELEMENTS(others); i++) {
+			if (mask & (1u << i))
+				fu_device_add_private_flag(device, others[i]);
+		}
+
+		/* not a Genesys hub firmware, and the device exposes no identity at all */
+		g_assert_nonnull(klass->check_firmware);
+		g_assert_false(
+		    klass->check_firmware(device, firmware, FU_FIRMWARE_PARSE_FLAG_NONE, &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+
+		/* a Genesys hub firmware without device identity is refused (fail closed) */
+		g_assert_false(klass->check_firmware(device,
+						     genesys_fw,
+						     FU_FIRMWARE_PARSE_FLAG_NONE,
+						     &error_genesys));
+		g_assert_error(error_genesys, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+	}
+}
+
+static FuDevice *
+fu_genesys_test_synthetic_hub_new(FuContext *ctx,
+				  const gchar *physical_id,
+				  guint16 pid,
+				  const gchar *hid_pid)
+{
+	g_autoptr(GError) error = NULL;
+	FuDevice *hub = g_object_new(FU_TYPE_GENESYS_USBHUB_DEVICE, NULL);
+
+	fu_device_set_context(hub, ctx);
+	fu_device_set_vid(hub, 0x17EF);
+	fu_device_set_pid(hub, pid);
+	fu_device_set_physical_id(hub, physical_id);
+	fu_device_add_private_flag(hub, FU_GENESYS_USBHUB_FLAG_REQUIRE_HID_PROXY);
+	g_assert_true(fu_device_set_quirk_kv(hub,
+					     "GenesysHidProxyPid",
+					     hid_pid,
+					     FU_CONTEXT_QUIRK_SOURCE_DB,
+					     &error));
+	g_assert_no_error(error);
+	return hub;
+}
+
+/*
+ * The HID VID/PIDs 17ef:f00f, 17ef:4c41 and 17ef:4c42 are shared between models. A HID may only
+ * become the update channel of the hub it hangs below, never of another dock's hub or of a hub
+ * that expects another HID model, even when the VID/PID looks right.
+ */
+static void
+fu_genesys_usbhub_device_identity_shared_hid_own_dock_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+	/* two docks, both with a hub that expects the shared 4c41 HID */
+	g_autoptr(FuDevice) hub_a =
+	    fu_genesys_test_synthetic_hub_new(ctx, "usb:01:04", 0x9901, "0x4C41");
+	g_autoptr(FuDevice) hub_b =
+	    fu_genesys_test_synthetic_hub_new(ctx, "usb:02:04", 0x9901, "0x4C41");
+	g_autoptr(FuDevice) hid_a = fu_genesys_test_hid_new(0x17EF, 0x4C41);
+	g_autoptr(FuDevice) hid_b = fu_genesys_test_hid_new(0x17EF, 0x4C41);
+	g_autoptr(GError) error = NULL;
+
+	/* each dock binds its own HID */
+	g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_a),
+							 hid_a,
+							 "usb:01:04",
+							 &error));
+	g_assert_no_error(error);
+	g_assert_true(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_b),
+							 hid_b,
+							 "usb:02:04",
+							 &error));
+	g_assert_no_error(error);
+	g_assert_true(fu_device_get_proxy(hub_a, NULL) == hid_a);
+	g_assert_true(fu_device_get_proxy(hub_b, NULL) == hid_b);
+}
+
+static void
+fu_genesys_usbhub_device_identity_shared_hid_refused_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+	g_autoptr(FuDevice) hub_a =
+	    fu_genesys_test_synthetic_hub_new(ctx, "usb:01:04", 0x9901, "0x4C41");
+	g_autoptr(FuDevice) hub_other =
+	    fu_genesys_test_synthetic_hub_new(ctx, "usb:03:04", 0x9902, "0x4C42");
+	g_autoptr(FuDevice) hub_unconfigured =
+	    fu_genesys_test_synthetic_hub_new(ctx, "usb:04:04", 0x9903, "0x0");
+	g_autoptr(FuDevice) hid_4c41_dock_b = fu_genesys_test_hid_new(0x17EF, 0x4C41);
+	g_autoptr(FuDevice) hid_4c41 = fu_genesys_test_hid_new(0x17EF, 0x4C41);
+	g_autoptr(GError) error = NULL;
+
+	/* dock B's 4c41 HID is never bound to dock A's hub */
+	g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_a),
+							  hid_4c41_dock_b,
+							  "usb:02:04",
+							  &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_null(fu_device_get_proxy(hub_a, NULL));
+	g_clear_error(&error);
+
+	/* a hub of another model, same shared VID/PID family but a different expected PID */
+	g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_other),
+							  hid_4c41,
+							  "usb:03:04",
+							  &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_null(fu_device_get_proxy(hub_other, NULL));
+	g_clear_error(&error);
+
+	/* no configured HID model: nothing can be bound, even the right-looking HID */
+	g_assert_false(
+	    fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(hub_unconfigured),
+					       hid_4c41,
+					       "usb:04:04",
+					       &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+	g_assert_null(fu_device_get_proxy(hub_unconfigured, NULL));
+	g_clear_error(&error);
+
+	/* a P40 hub (1153 expects 4c41) never takes a 4c41 HID that sits below another dock */
+	{
+		g_autoptr(FuContext) ctx_p40 = fu_genesys_test_context_new();
+		g_autoptr(FuDevice) p40 =
+		    fu_genesys_test_hub_new(ctx_p40, "USB\\VID_17EF&PID_1153", 0x1153);
+
+		g_assert_false(fu_genesys_usbhub_device_set_proxy(FU_GENESYS_USBHUB_DEVICE(p40),
+								  hid_4c41,
+								  FU_GENESYS_TEST_OTHER_PHYSICAL_ID,
+								  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+		g_assert_null(fu_device_get_proxy(p40, NULL));
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -691,5 +993,15 @@ main(int argc, char **argv)
 			fu_genesys_usbhub_device_hid_proxy_replug_func);
 	g_test_add_func("/fwupd/genesys/hid-proxy/no-regression",
 			fu_genesys_usbhub_device_hid_proxy_no_regression_func);
+	g_test_add_func("/fwupd/genesys/identity/cross-model",
+			fu_genesys_usbhub_device_identity_cross_model_func);
+	g_test_add_func("/fwupd/genesys/identity/unknown-identity",
+			fu_genesys_usbhub_device_identity_unknown_identity_func);
+	g_test_add_func("/fwupd/genesys/identity/check-firmware-not-relaxed",
+			fu_genesys_usbhub_device_identity_check_firmware_not_relaxed_func);
+	g_test_add_func("/fwupd/genesys/identity/shared-hid-own-dock",
+			fu_genesys_usbhub_device_identity_shared_hid_own_dock_func);
+	g_test_add_func("/fwupd/genesys/identity/shared-hid-refused",
+			fu_genesys_usbhub_device_identity_shared_hid_refused_func);
 	return g_test_run();
 }
