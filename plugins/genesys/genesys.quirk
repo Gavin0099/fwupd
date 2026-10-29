@@ -42,8 +42,8 @@ RemoveDelay = 40000
 # dual-image picks the bank to write from the pre-read bank versions (bank1 unless it is newer
 # than bank2); the bank1-newer branch (bank2 on 1121, backup to bank2 on 1122/1123) is not yet measured on
 # hardware. RemoveDelay is 40 s as on P40: the hub took about 11 s to reappear, the default is 5 s.
-# hid-transport is set for 1121 only: its direct 0x81 ISP_ENTER stalls as it does on the P40 L1 1151,
-# while 1122 and 1123 answer on USB control.
+# hid-transport is set on all three Hubs like the vendor CLI: the flash part of setup runs through
+# the bound HID. Verified on hardware for 1121 only; 1122 and 1123 answered on USB control before.
 # A wrong GenesysHidProxyPid only keeps the Hub inhibited.
 # 1121 (GL3525) runs its newest bank: an image older than the other bank is refused before any write.
 # 1122/1123 (GL3523) booted the written lower bank1.
@@ -62,7 +62,7 @@ RemoveDelay = 40000
 [USB\VID_17EF&PID_1122]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
-Flags = strict-project-check,require-hid-proxy,single-hid-proxy,dual-image
+Flags = strict-project-check,hid-transport,require-hid-proxy,single-hid-proxy,dual-image
 GenesysHidProxyPid = 0x4C41
 GenesysParentHubPid = 0x1121
 RemoveDelay = 40000
@@ -70,7 +70,7 @@ RemoveDelay = 40000
 [USB\VID_17EF&PID_1123]
 Plugin = genesys
 GType = FuGenesysUsbhubDevice
-Flags = strict-project-check,require-hid-proxy,single-hid-proxy,dual-image
+Flags = strict-project-check,hid-transport,require-hid-proxy,single-hid-proxy,dual-image
 GenesysHidProxyPid = 0x4C42
 GenesysParentHubPid = 0x1122
 RemoveDelay = 40000

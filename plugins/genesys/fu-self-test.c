@@ -1015,15 +1015,13 @@ fu_genesys_usbhub_device_p34_quirk_func(void)
 		g_assert_true(
 		    fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_SINGLE_HID_PROXY));
 
-		/* P40-only flags stay off, hid-transport is 1121 only, dual-image and the 40 s
-		 * replug window apply to all three */
+		/* P40-only flags stay off, hid-transport, dual-image and the 40 s replug window
+		 * apply to all three */
 		g_assert_false(
 		    fu_device_has_private_flag(hub,
 					       FU_GENESYS_USBHUB_FLAG_P40_STRICT_PROJECT_CHECK));
-		g_assert_cmpint(
-		    fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT),
-		    ==,
-		    i == 0);
+		g_assert_true(
+		    fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_HID_TRANSPORT));
 		g_assert_false(
 		    fu_device_has_private_flag(hub, FU_GENESYS_USBHUB_FLAG_EXIT_ISP_BEFORE_RESET));
 		g_assert_true(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_DUAL_IMAGE));
