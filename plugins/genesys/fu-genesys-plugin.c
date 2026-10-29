@@ -43,6 +43,7 @@ fu_genesys_plugin_constructed(GObject *obj)
 	fu_context_add_quirk_key(ctx, "GenesysSupportDualBank");
 	fu_context_add_quirk_key(ctx, "GenesysSupportCodeSize");
 	fu_context_add_quirk_key(ctx, "GenesysHidProxyPid");
+	fu_context_add_quirk_key(ctx, "GenesysParentHubPid");
 	fu_context_add_quirk_key(ctx, "GenesysHubBank1Address");
 	fu_context_add_quirk_key(ctx, "GenesysHubBank2Address");
 	fu_context_add_quirk_key(ctx, "GenesysHubBankCapacity");
