@@ -4,20 +4,24 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/governance-drift.yml"
       - ".governance/**"
       - "AGENTS.base.md"
       - "AGENTS.md"
       - "PLAN.md"
       - "contract.yaml"
+      - "ai-governance-framework"
       - "governance/**"
   pull_request:
     branches: [main]
     paths:
+      - ".github/workflows/governance-drift.yml"
       - ".governance/**"
       - "AGENTS.base.md"
       - "AGENTS.md"
       - "PLAN.md"
       - "contract.yaml"
+      - "ai-governance-framework"
       - "governance/**"
   workflow_dispatch:
 
@@ -27,16 +31,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Run governance drift check
+      - name: Set up governance framework
         run: |
-          python governance/governance_tools/governance_drift_checker.py \
-            --repo . \
-            --framework-root governance \
+          git submodule update --init -- ai-governance-framework
+          python -m pip install PyYAML
+
+      - name: Run governance drift check
+        working-directory: ai-governance-framework
+        run: |
+          python -m governance_tools.governance_drift_checker \
+            --repo .. \
+            --framework-root . \
             --format human
