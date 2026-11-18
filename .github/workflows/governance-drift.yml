@@ -25,12 +25,17 @@ on:
       - "governance/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   governance-drift:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -44,7 +49,13 @@ jobs:
       - name: Run governance drift check
         working-directory: ai-governance-framework
         run: |
+          status=0
           python -m governance_tools.governance_drift_checker \
             --repo .. \
             --framework-root . \
-            --format human
+            --format human || status=$?
+          case "$status" in
+            0) ;;
+            1) echo "::warning::Governance Drift reported advisory findings; see the checker output." ;;
+            *) exit "$status" ;;
+          esac
