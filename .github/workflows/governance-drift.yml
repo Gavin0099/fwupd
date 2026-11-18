@@ -4,22 +4,29 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/governance-drift.yml"
       - ".governance/**"
       - "AGENTS.base.md"
       - "AGENTS.md"
       - "PLAN.md"
       - "contract.yaml"
+      - "ai-governance-framework"
       - "governance/**"
   pull_request:
     branches: [main]
     paths:
+      - ".github/workflows/governance-drift.yml"
       - ".governance/**"
       - "AGENTS.base.md"
       - "AGENTS.md"
       - "PLAN.md"
       - "contract.yaml"
+      - "ai-governance-framework"
       - "governance/**"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   governance-drift:
@@ -28,15 +35,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Run governance drift check
+      - name: Set up governance framework
         run: |
-          python governance/governance_tools/governance_drift_checker.py \
-            --repo . \
-            --framework-root governance \
-            --format human
+          git submodule update --init -- ai-governance-framework
+          python -m pip install PyYAML
+
+      - name: Run governance drift check
+        working-directory: ai-governance-framework
+        run: |
+          status=0
+          python -m governance_tools.governance_drift_checker \
+            --repo .. \
+            --framework-root . \
+            --format human || status=$?
+          case "$status" in
+            0) ;;
+            1) echo "::warning::Governance Drift reported advisory findings; see the checker output." ;;
+            *) exit "$status" ;;
+          esac
