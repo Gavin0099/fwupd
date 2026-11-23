@@ -535,6 +535,63 @@ fu_genesys_usbhub_device_set_flash_rw_size(FuGenesysUsbhubDevice *self, guint32 
 	self->flash_rw_size = flash_rw_size;
 }
 
+/* fu_chunk_array_new() cuts by data offset, not by address, so a 0xffc0 packet crosses 64 KB */
+GPtrArray *
+fu_genesys_usbhub_device_chunks_new(const guint8 *data,
+				    gsize data_sz,
+				    gsize addr_offset,
+				    gsize page_sz,
+				    gsize packet_sz,
+				    gboolean mutable,
+				    GError **error)
+{
+	gsize offset = 0;
+	g_autoptr(GPtrArray) chunks = g_ptr_array_new_with_free_func(g_object_unref);
+
+	g_return_val_if_fail(packet_sz > 0, NULL);
+	g_return_val_if_fail(error == NULL || *error == NULL, NULL);
+
+	while (offset < data_sz) {
+		gsize addr = addr_offset + offset;
+		gsize span = data_sz - offset;
+		g_autoptr(GPtrArray) sub = NULL;
+
+		/* one span never leaves the hardware page */
+		if (page_sz > 0)
+			span = MIN(span, page_sz - (addr % page_sz));
+		if (mutable) {
+			sub = fu_chunk_array_mutable_new((guint8 *)data + offset,
+							 span,
+							 addr,
+							 FU_CHUNK_PAGESZ_NONE,
+							 packet_sz,
+							 error);
+		} else {
+			sub = fu_chunk_array_new(data != NULL ? data + offset : NULL,
+						 span,
+						 addr,
+						 FU_CHUNK_PAGESZ_NONE,
+						 packet_sz,
+						 error);
+		}
+		if (sub == NULL)
+			return NULL;
+		for (guint i = 0; i < sub->len; i++) {
+			FuChunk *chk = g_ptr_array_index(sub, i);
+			gsize chk_addr = fu_chunk_get_address(chk);
+
+			fu_chunk_set_idx(chk, chunks->len);
+			if (page_sz > 0) {
+				fu_chunk_set_page(chk, chk_addr / page_sz);
+				fu_chunk_set_address(chk, chk_addr % page_sz);
+			}
+			g_ptr_array_add(chunks, g_object_ref(chk));
+		}
+		offset += span;
+	}
+	return g_steal_pointer(&chunks);
+}
+
 static gboolean
 fu_genesys_usbhub_device_read_flash(FuGenesysUsbhubDevice *self,
 				    guint start_addr,
@@ -545,12 +602,13 @@ fu_genesys_usbhub_device_read_flash(FuGenesysUsbhubDevice *self,
 {
 	g_autoptr(GPtrArray) chunks = NULL;
 
-	chunks = fu_chunk_array_mutable_new(buf,
-					    bufsz,
-					    start_addr,
-					    self->flash_block_size,
-					    self->flash_rw_size,
-					    error);
+	chunks = fu_genesys_usbhub_device_chunks_new(buf,
+						     bufsz,
+						     start_addr,
+						     self->flash_block_size,
+						     self->flash_rw_size,
+						     TRUE,
+						     error);
 	if (chunks == NULL)
 		return FALSE;
 	if (progress != NULL) {
@@ -617,12 +675,13 @@ fu_genesys_usbhub_device_compare_flash_blank(FuGenesysUsbhubDevice *self,
 	fu_byte_array_set_size(read_buf, self->flash_rw_size, 0xFF);
 	fu_byte_array_set_size(blank_buf, self->flash_rw_size, 0xFF);
 
-	chunks = fu_chunk_array_new(NULL,
-				    read_size,
-				    read_addr,
-				    self->flash_block_size,
-				    self->flash_rw_size,
-				    error);
+	chunks = fu_genesys_usbhub_device_chunks_new(NULL,
+						     read_size,
+						     read_addr,
+						     self->flash_block_size,
+						     self->flash_rw_size,
+						     FALSE,
+						     error);
 	if (chunks == NULL)
 		return FALSE;
 	fu_progress_set_id(progress, G_STRLOC);
@@ -682,12 +741,13 @@ fu_genesys_usbhub_device_compare_flash_data(FuGenesysUsbhubDevice *self,
 
 	fu_byte_array_set_size(read_buf, self->flash_rw_size, 0xFF);
 
-	chunks = fu_chunk_array_new(buf,
-				    bufsz,
-				    start_addr,
-				    self->flash_block_size,
-				    self->flash_rw_size,
-				    error);
+	chunks = fu_genesys_usbhub_device_chunks_new(buf,
+						     bufsz,
+						     start_addr,
+						     self->flash_block_size,
+						     self->flash_rw_size,
+						     FALSE,
+						     error);
 	if (chunks == NULL)
 		return FALSE;
 	fu_progress_set_id(progress, G_STRLOC);
@@ -1185,6 +1245,21 @@ fu_genesys_usbhub_device_bank_state_from_error(const GError *error)
 	return FU_GENESYS_USBHUB_BANK_STATE_UNKNOWN;
 }
 
+/* what a bank image that was read completely says about the firmware: only a checksum that
+ * does not match is a proof that it is bad, an image too small to hold the checksum is not */
+FuGenesysUsbhubBankState
+fu_genesys_usbhub_device_bank_state_from_image(const guint8 *buf, gsize bufsz)
+{
+	guint16 fw_checksum = 0;
+
+	if (buf == NULL || bufsz < sizeof(fw_checksum))
+		return FU_GENESYS_USBHUB_BANK_STATE_UNKNOWN;
+	fw_checksum = fu_memread_uint16(buf + bufsz - sizeof(fw_checksum), G_BIG_ENDIAN);
+	if (fu_sum16(buf, bufsz - sizeof(fw_checksum)) != fw_checksum)
+		return FU_GENESYS_USBHUB_BANK_STATE_INVALID;
+	return FU_GENESYS_USBHUB_BANK_STATE_VALID;
+}
+
 gboolean
 fu_genesys_usbhub_device_select_update_bank2(gboolean is_gl3523,
 					     guint16 bank1_version,
@@ -1214,7 +1289,6 @@ fu_genesys_usbhub_device_get_fw_bank_version(FuGenesysUsbhubDevice *self,
 	gsize bufsz = 0;
 	g_autoptr(GError) error_local = NULL;
 	g_autoptr(GBytes) blob = NULL;
-	g_autoptr(FuInputStream) stream = NULL;
 	g_autofree guint8 *buf = NULL;
 
 	g_return_val_if_fail(fw_type < FU_GENESYS_FW_TYPE_INSIDE_HUB_COUNT, FALSE);
@@ -1265,21 +1339,25 @@ fu_genesys_usbhub_device_get_fw_bank_version(FuGenesysUsbhubDevice *self,
 
 	/* verify bank firmware integrity */
 	blob = g_bytes_new_take(g_steal_pointer(&buf), bufsz);
-	stream = FWUPD_INPUT_STREAM(fwupd_memory_input_stream_new_from_bytes(blob));
-	if (!fu_genesys_usbhub_firmware_verify_checksum(stream, &error_local)) {
-		FuGenesysUsbhubBankState state =
-		    fu_genesys_usbhub_device_bank_state_from_error(error_local);
-		if (state != FU_GENESYS_USBHUB_BANK_STATE_INVALID) {
-			g_propagate_error(error, g_steal_pointer(&error_local));
-			return FALSE;
-		}
-		g_debug("ignoring firmware %s bank%d: %s",
+	switch (fu_genesys_usbhub_device_bank_state_from_image(g_bytes_get_data(blob, NULL),
+							       g_bytes_get_size(blob))) {
+	case FU_GENESYS_USBHUB_BANK_STATE_VALID:
+		break;
+	case FU_GENESYS_USBHUB_BANK_STATE_INVALID:
+		g_debug("ignoring firmware %s bank%d: checksum mismatch",
 			fu_genesys_fw_type_to_string(fw_type),
-			bank_num + 1,
-			error_local->message);
+			bank_num + 1);
 		self->fw_bank_vers[bank_num][fw_type] = 0;
-		self->fw_bank_states[bank_num][fw_type] = state;
+		self->fw_bank_states[bank_num][fw_type] = FU_GENESYS_USBHUB_BANK_STATE_INVALID;
 		return TRUE;
+	default:
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "firmware %s bank%d is too small to verify",
+			    fu_genesys_fw_type_to_string(fw_type),
+			    bank_num + 1);
+		return FALSE;
 	}
 
 	/* get firmware version from bank firmware */
@@ -2930,12 +3008,13 @@ fu_genesys_usbhub_device_write_flash(FuGenesysUsbhubDevice *self,
 	FuGenesysWaitFlashRegisterHelper helper = {.reg = 5, .expected_val = 0};
 	g_autoptr(GPtrArray) chunks = NULL;
 
-	chunks = fu_chunk_array_new(buf,
-				    bufsz,
-				    start_addr,
-				    self->flash_block_size,
-				    self->flash_rw_size,
-				    error);
+	chunks = fu_genesys_usbhub_device_chunks_new(buf,
+						     bufsz,
+						     start_addr,
+						     self->flash_block_size,
+						     self->flash_rw_size,
+						     FALSE,
+						     error);
 	if (chunks == NULL)
 		return FALSE;
 	fu_progress_set_id(progress, G_STRLOC);

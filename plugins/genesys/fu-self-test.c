@@ -692,6 +692,21 @@ fu_genesys_usbhub_device_p34_dual_bank_safety_func(void)
 	g_assert_cmpint(fu_genesys_usbhub_device_bank_state_from_error(read_err),
 			==,
 			FU_GENESYS_USBHUB_BANK_STATE_UNKNOWN);
+	{
+		const guint8 bad_bank[] = {0xFF, 0xFF, 0xFF, 0xFF};
+		const guint8 good_bank[] = {0x01, 0x02, 0x00, 0x03};
+		g_assert_cmpint(
+		    fu_genesys_usbhub_device_bank_state_from_image(bad_bank, sizeof(bad_bank)),
+		    ==,
+		    FU_GENESYS_USBHUB_BANK_STATE_INVALID);
+		g_assert_cmpint(
+		    fu_genesys_usbhub_device_bank_state_from_image(good_bank, sizeof(good_bank)),
+		    ==,
+		    FU_GENESYS_USBHUB_BANK_STATE_VALID);
+		g_assert_cmpint(fu_genesys_usbhub_device_bank_state_from_image(good_bank, 1),
+				==,
+				FU_GENESYS_USBHUB_BANK_STATE_UNKNOWN);
+	}
 
 	/* GL3523 backs up bank1 to bank2 and writes bank1; GL3525 writes bank2 */
 	g_assert_false(fu_genesys_usbhub_device_select_update_bank2(TRUE, 0x8716, 0x8715, &backup));
@@ -1016,6 +1031,38 @@ fu_genesys_usbhub_device_p34_firmware_project_parse_func(void)
 	}
 }
 
+/* GL3525 Bank 2 starts at 0xB000 with size 0xB000: a 0xFFC0 packet must split at 0x10000 */
+static void
+fu_genesys_usbhub_device_p34_chunks_page_boundary_func(void)
+{
+	g_autofree guint8 *buf = g_malloc0(0xB000);
+	g_autoptr(GPtrArray) chunks = NULL;
+	g_autoptr(GError) error = NULL;
+	FuChunk *chk0;
+	FuChunk *chk1;
+
+	chunks = fu_genesys_usbhub_device_chunks_new(buf,
+						     0xB000,
+						     0xB000,
+						     0x10000,
+						     0xFFC0,
+						     FALSE,
+						     &error);
+	g_assert_no_error(error);
+	g_assert_nonnull(chunks);
+	g_assert_cmpuint(chunks->len, ==, 2);
+
+	chk0 = g_ptr_array_index(chunks, 0);
+	g_assert_cmpuint(fu_chunk_get_page(chk0), ==, 0);
+	g_assert_cmpuint(fu_chunk_get_address(chk0), ==, 0xB000);
+	g_assert_cmpuint(fu_chunk_get_data_sz(chk0), ==, 0x5000);
+
+	chk1 = g_ptr_array_index(chunks, 1);
+	g_assert_cmpuint(fu_chunk_get_page(chk1), ==, 1);
+	g_assert_cmpuint(fu_chunk_get_address(chk1), ==, 0x0000);
+	g_assert_cmpuint(fu_chunk_get_data_sz(chk1), ==, 0x6000);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1038,5 +1085,7 @@ main(int argc, char **argv)
 			fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func);
 	g_test_add_func("/fwupd/genesys/p34/firmware-project-parse",
 			fu_genesys_usbhub_device_p34_firmware_project_parse_func);
+	g_test_add_func("/fwupd/genesys/p34/chunks-page-boundary",
+			fu_genesys_usbhub_device_p34_chunks_page_boundary_func);
 	return g_test_run();
 }

@@ -55,6 +55,8 @@ fu_genesys_usbhub_device_set_ctrl_hook(FuGenesysUsbhubDevice *self,
 				       gpointer user_data);
 FuGenesysUsbhubBankState
 fu_genesys_usbhub_device_bank_state_from_error(const GError *error);
+FuGenesysUsbhubBankState
+fu_genesys_usbhub_device_bank_state_from_image(const guint8 *buf, gsize bufsz);
 gboolean
 fu_genesys_usbhub_device_select_update_bank2(gboolean is_gl3523,
 					     guint16 bank1_version,
@@ -82,3 +84,11 @@ fu_genesys_usbhub_device_check_update_bank(gboolean banks_compared,
 					   gboolean other_bank_runs,
 					   guint16 target_version,
 					   GError **error);
+GPtrArray *
+fu_genesys_usbhub_device_chunks_new(const guint8 *data,
+				    gsize data_sz,
+				    gsize addr_offset,
+				    gsize page_sz,
+				    gsize packet_sz,
+				    gboolean mutable,
+				    GError **error);
