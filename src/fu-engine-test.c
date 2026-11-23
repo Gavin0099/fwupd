@@ -3887,6 +3887,507 @@ fu_engine_report_metadata_func(void)
 	}
 }
 
+#define FU_TYPE_TEST_P34_HUB_DEVICE (fu_test_p34_hub_device_get_type())
+G_DECLARE_FINAL_TYPE(FuTestP34HubDevice, fu_test_p34_hub_device, FU, TEST_P34_HUB_DEVICE, FuDevice)
+
+struct _FuTestP34HubDevice {
+	FuDevice parent_instance;
+	GPtrArray *write_log; /* (nullable) owned by test */
+	const gchar *target_version;
+	gboolean fail_write;
+	gboolean simulate_replug_timeout;
+	gboolean fail_reload;
+};
+
+G_DEFINE_TYPE(FuTestP34HubDevice, fu_test_p34_hub_device, FU_TYPE_DEVICE)
+
+static gboolean
+fu_test_p34_hub_device_write_firmware(FuDevice *device,
+				      FuFirmware *firmware,
+				      FuProgress *progress,
+				      FwupdInstallFlags flags,
+				      GError **error)
+{
+	FuTestP34HubDevice *self = FU_TEST_P34_HUB_DEVICE(device);
+
+	if (self->write_log != NULL)
+		g_ptr_array_add(self->write_log, g_strdup(fu_device_get_logical_id(device)));
+	if (self->fail_write) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_WRITE,
+			    "injected write failure on %s",
+			    fu_device_get_logical_id(device));
+		return FALSE;
+	}
+	if (self->simulate_replug_timeout) {
+		fu_device_set_remove_delay(device, 50);
+		fu_device_add_flag(device, FWUPD_DEVICE_FLAG_WAIT_FOR_REPLUG);
+		return TRUE;
+	}
+	if (self->target_version != NULL)
+		fu_device_set_version(device, self->target_version);
+	return TRUE;
+}
+
+static gboolean
+fu_test_p34_hub_device_reload(FuDevice *device, GError **error)
+{
+	FuTestP34HubDevice *self = FU_TEST_P34_HUB_DEVICE(device);
+
+	if (self->fail_reload) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "injected bank/version verification failure on %s",
+			    fu_device_get_logical_id(device));
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static void
+fu_test_p34_hub_device_class_init(FuTestP34HubDeviceClass *klass)
+{
+	FuDeviceClass *device_class = FU_DEVICE_CLASS(klass);
+	device_class->write_firmware = fu_test_p34_hub_device_write_firmware;
+	device_class->reload = fu_test_p34_hub_device_reload;
+}
+
+static void
+fu_test_p34_hub_device_init(FuTestP34HubDevice *self)
+{
+}
+
+static gchar *
+fu_engine_p34_load_fixture(const gchar *filename)
+{
+	g_autofree gchar *xml = NULL;
+	g_autoptr(GError) error = NULL;
+	const gchar *path = g_test_build_filename(G_TEST_DIST,
+						  "..",
+						  "plugins",
+						  "genesys",
+						  "tests",
+						  "p34-hub-cab",
+						  filename,
+						  NULL);
+
+	g_assert_true(g_file_get_contents(path, &xml, NULL, &error));
+	g_assert_no_error(error);
+	return g_steal_pointer(&xml);
+}
+
+static FuCabinet *
+fu_engine_p34_build_canonical_cab(void)
+{
+	g_autofree gchar *xml_l1 = fu_engine_p34_load_fixture("l1.metainfo.xml");
+	g_autofree gchar *xml_l2 = fu_engine_p34_load_fixture("l2.metainfo.xml");
+	g_autofree gchar *xml_l3 = fu_engine_p34_load_fixture("l3.metainfo.xml");
+	g_autoptr(FuCabinet) cabinet = fu_cabinet_new();
+	g_autoptr(GBytes) blob = NULL;
+	g_autoptr(GError) error = NULL;
+	gboolean ret;
+
+	blob = fu_test_build_cab(FALSE,
+				 "l1.metainfo.xml",
+				 xml_l1,
+				 "l2.metainfo.xml",
+				 xml_l2,
+				 "l3.metainfo.xml",
+				 xml_l3,
+				 "l1.bin",
+				 "p34-l1-payload",
+				 "l2.bin",
+				 "p34-l2-payload",
+				 "l3.bin",
+				 "p34-l3-payload",
+				 NULL);
+	ret = fu_firmware_parse_bytes(FU_FIRMWARE(cabinet),
+				      blob,
+				      0x0,
+				      FU_FIRMWARE_PARSE_FLAG_CACHE_BLOB,
+				      &error);
+	g_assert_no_error(error);
+	g_assert_true(ret);
+	return g_steal_pointer(&cabinet);
+}
+
+static void
+fu_engine_p34_composite_setup(FuEngine *engine,
+			      FuEngineRequest *request,
+			      FuCabinet *cabinet,
+			      const gchar *const guids[3],
+			      gboolean include_l2,
+			      GPtrArray *write_log,
+			      FuTestP34HubDevice *out_hubs[3],
+			      GPtrArray *releases)
+{
+	gboolean ret;
+	const gchar *ids[3] = {"p34-l1", "p34-l2", "p34-l3"};
+	const gchar *phys_ids[3] = {"1-4", "1-4.1", "1-4.1.2"};
+	const gchar *logical_ids[3] = {"l1", "l2", "l3"};
+	const gchar *vers[3] = {"86.20", "87.10", "88.10"};
+	const gchar *target_vers[3] = {"86.25", "87.16", "88.17"};
+	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+	g_autoptr(FuPlugin) plugin = fu_plugin_new(fu_engine_get_context(engine));
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) components = NULL;
+	g_autoptr(GPtrArray) active_devs = g_ptr_array_new();
+	g_autoptr(XbSilo) silo_empty = xb_silo_new();
+
+	fu_engine_set_silo(engine, silo_empty);
+	ret = fu_engine_load(engine, FU_ENGINE_LOAD_FLAG_NO_CACHE, progress, &error);
+	g_assert_no_error(error);
+	g_assert_true(ret);
+
+	fu_plugin_set_name(plugin, "p34sim");
+	fu_engine_add_plugin(engine, plugin);
+
+	for (guint i = 0; i < 3; i++) {
+		FuTestP34HubDevice *hub;
+		FuDevice *dev;
+
+		if (i == 1 && !include_l2) {
+			out_hubs[i] = NULL;
+			continue;
+		}
+		hub = g_object_new(FU_TYPE_TEST_P34_HUB_DEVICE, NULL);
+		hub->write_log = write_log;
+		hub->target_version = target_vers[i];
+		dev = FU_DEVICE(hub);
+		fu_device_set_context(dev, fu_engine_get_context(engine));
+		fu_device_set_id(dev, ids[i]);
+		fu_device_set_physical_id(dev, phys_ids[i]);
+		fu_device_set_logical_id(dev, logical_ids[i]);
+		fu_device_set_name(dev, ids[i]);
+		fu_device_set_plugin(dev, "p34sim");
+		fu_device_build_vendor_id_u16(dev, "USB", 0x17EF);
+		fu_device_add_protocol(dev, "com.genesys.usbhub");
+		fu_device_set_version_format(dev, FWUPD_VERSION_FORMAT_PAIR);
+		fu_device_set_version(dev, vers[i]);
+		fu_device_add_flag(dev, FWUPD_DEVICE_FLAG_UPDATABLE);
+		fu_device_add_flag(dev, FWUPD_DEVICE_FLAG_UNSIGNED_PAYLOAD);
+		fu_device_add_private_flag(dev, FU_DEVICE_PRIVATE_FLAG_REPLUG_MATCH_GUID);
+		if (i > 0)
+			fu_device_add_private_flag(dev, FU_DEVICE_PRIVATE_FLAG_ENFORCE_REQUIRES);
+		fu_device_add_instance_id(dev, guids[i]);
+		out_hubs[i] = hub;
+		g_ptr_array_add(active_devs, dev);
+	}
+
+	if (include_l2) {
+		fu_device_add_child(FU_DEVICE(out_hubs[0]), FU_DEVICE(out_hubs[1]));
+		fu_device_add_child(FU_DEVICE(out_hubs[1]), FU_DEVICE(out_hubs[2]));
+	}
+	for (guint i = 0; i < active_devs->len; i++) {
+		FuDevice *dev = g_ptr_array_index(active_devs, i);
+		fu_engine_add_device(engine, dev);
+	}
+
+	components = fu_cabinet_get_components(cabinet, &error);
+	g_assert_no_error(error);
+	g_assert_cmpuint(components->len, ==, 3);
+
+	/* match in L1 -> L2 -> L3 order so fu_engine_install_releases() must re-sort by priority */
+	for (guint i = 0; i < components->len; i++) {
+		XbNode *component = g_ptr_array_index(components, i);
+		for (guint j = 0; j < active_devs->len; j++) {
+			FuDevice *dev = g_ptr_array_index(active_devs, j);
+			g_autoptr(FuRelease) release = fu_release_new();
+			g_autoptr(GError) error_local = NULL;
+
+			fu_release_set_device(release, dev);
+			fu_release_set_request(release, request);
+			if (!fu_release_load(release,
+					     cabinet,
+					     component,
+					     NULL,
+					     FWUPD_INSTALL_FLAG_NONE,
+					     &error_local))
+				continue;
+			if (!fu_engine_requirements_check(engine,
+							  release,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error_local))
+				continue;
+			g_ptr_array_add(releases, g_steal_pointer(&release));
+		}
+	}
+}
+
+static void
+fu_engine_p34_composite_cab_func(void)
+{
+	const gchar *model_a[3] = {
+	    "008d820f-ffc9-502d-8f25-f9313d04e8de",
+	    "7ea0761a-9e0c-5879-b808-e8d9b8beafae",
+	    "9a0bece0-69e7-5489-a218-6645fb94f72d",
+	};
+	const gchar *model_b[3] = {
+	    "00000000-0000-5000-8000-000000001151",
+	    "7ea0761a-9e0c-5879-b808-e8d9b8beafae",
+	    "9a0bece0-69e7-5489-a218-6645fb94f72d",
+	};
+	g_autoptr(FuCabinet) cabinet = fu_engine_p34_build_canonical_cab();
+
+	/* 1. Model A: real 3-component CAB installs strictly in L3 -> L2 -> L1 order */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
+		gboolean ret;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		g_assert_cmpuint(releases->len, ==, 3);
+		g_assert_cmpstr(fu_device_get_composite_id(FU_DEVICE(hubs[2])),
+				==,
+				fu_device_get_id(FU_DEVICE(hubs[0])));
+
+		ret = fu_engine_install_releases(engine,
+						 request,
+						 releases,
+						 progress,
+						 FWUPD_INSTALL_FLAG_NONE,
+						 &error);
+		g_assert_no_error(error);
+		g_assert_true(ret);
+
+		g_assert_cmpuint(write_log->len, ==, 3);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(g_ptr_array_index(write_log, 1), ==, "l2");
+		g_assert_cmpstr(g_ptr_array_index(write_log, 2), ==, "l1");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[2])), ==, "88.17");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[1])), ==, "87.16");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.25");
+
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+
+	/* 2. Model B (L1 = 1151): entire Model-A composite CAB is rejected with zero writes */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_b,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		g_assert_cmpuint(releases->len, ==, 0);
+		g_assert_cmpuint(write_log->len, ==, 0);
+
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+}
+
+static void
+fu_engine_p34_composite_cab_failures_func(void)
+{
+	const gchar *model_a[3] = {
+	    "008d820f-ffc9-502d-8f25-f9313d04e8de",
+	    "7ea0761a-9e0c-5879-b808-e8d9b8beafae",
+	    "9a0bece0-69e7-5489-a218-6645fb94f72d",
+	};
+	g_autoptr(FuCabinet) cabinet = fu_engine_p34_build_canonical_cab();
+
+	/* 1. L3 write fails: composite update aborts immediately; L2 and L1 are never written */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		hubs[2]->fail_write = TRUE;
+		g_assert_false(fu_engine_install_releases(engine,
+							  request,
+							  releases,
+							  progress,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_WRITE);
+		g_assert_cmpuint(write_log->len, ==, 1);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[1])), ==, "87.10");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.20");
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+
+	/* 2. L2 write fails after L3 succeeds: stops before L1 is ever touched */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		hubs[1]->fail_write = TRUE;
+		g_assert_false(fu_engine_install_releases(engine,
+							  request,
+							  releases,
+							  progress,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_WRITE);
+		g_assert_cmpuint(write_log->len, ==, 2);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(g_ptr_array_index(write_log, 1), ==, "l2");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.20");
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+
+	/* 3. L3 replug timeout: aborts composite update; L2 and L1 are never written */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		hubs[2]->simulate_replug_timeout = TRUE;
+		g_assert_false(fu_engine_install_releases(engine,
+							  request,
+							  releases,
+							  progress,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error));
+		g_assert_nonnull(error);
+		g_assert_cmpuint(write_log->len, ==, 1);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[1])), ==, "87.10");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.20");
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+
+	/* 4. L3 post-write bank/version reload fails: stops before L2/L1 are written */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      releases);
+		hubs[2]->fail_reload = TRUE;
+		g_assert_false(fu_engine_install_releases(engine,
+							  request,
+							  releases,
+							  progress,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+		g_assert_cmpuint(write_log->len, ==, 1);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[1])), ==, "87.10");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.20");
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
+	}
+
+	/* 5. Next target (L2) missing from topology: L3 cannot satisfy depth=1, never matched */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      FALSE,
+					      write_log,
+					      hubs,
+					      releases);
+		/* only L1 matches; L3 is rejected because L2 parent is missing */
+		g_assert_cmpuint(releases->len, ==, 1);
+		g_assert_cmpstr(fu_device_get_logical_id(fu_release_get_device(
+				    FU_RELEASE(g_ptr_array_index(releases, 0)))),
+				==,
+				"l1");
+		g_assert_cmpuint(write_log->len, ==, 0);
+		g_object_unref(hubs[0]);
+		g_object_unref(hubs[2]);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3944,5 +4445,8 @@ main(int argc, char **argv)
 	g_test_add_func("/fwupd/engine/plugin/composite-multistep",
 			fu_engine_plugin_composite_multistep_func);
 	g_test_add_func("/fwupd/engine/write-bios-attrs", fu_engine_modify_bios_settings_func);
+	g_test_add_func("/fwupd/engine/p34-composite-cab", fu_engine_p34_composite_cab_func);
+	g_test_add_func("/fwupd/engine/p34-composite-cab-failures",
+			fu_engine_p34_composite_cab_failures_func);
 	return g_test_run();
 }
