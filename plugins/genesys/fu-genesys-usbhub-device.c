@@ -344,25 +344,96 @@ fu_genesys_usbhub_device_ensure_hub_chain(FuGenesysUsbhubDevice *self, GError **
 	return TRUE;
 }
 
+gboolean
+fu_genesys_usbhub_device_verify_hid_proxy(FuGenesysUsbhubDevice *self,
+					  FuDevice *proxy,
+					  GError **error)
+{
+	const gchar *hub_phys;
+	const gchar *parent_phys;
+	g_autoptr(FuDevice) hid_parent = NULL;
+	g_autoptr(GError) error_local = NULL;
+
+	g_return_val_if_fail(FU_IS_GENESYS_USBHUB_DEVICE(self), FALSE);
+	g_return_val_if_fail(error == NULL || *error == NULL, FALSE);
+
+	if (proxy == NULL) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "HID proxy is required for this hub");
+		return FALSE;
+	}
+	if (fu_device_has_private_flag(proxy, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED)) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_FOUND,
+				    "HID proxy is no longer connected");
+		return FALSE;
+	}
+	if (self->hid_proxy_id != NULL) {
+		g_autofree gchar *actual_id = g_strdup_printf("USB\\VID_%04X&PID_%04X",
+							      fu_device_get_vid(proxy),
+							      fu_device_get_pid(proxy));
+		if (g_ascii_strcasecmp(actual_id, self->hid_proxy_id) != 0 &&
+		    !fu_device_has_instance_id(proxy,
+					       self->hid_proxy_id,
+					       FU_DEVICE_INSTANCE_FLAG_VISIBLE)) {
+			g_set_error(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_INVALID_DATA,
+				    "HID proxy %s does not match expected %s",
+				    actual_id,
+				    self->hid_proxy_id);
+			return FALSE;
+		}
+	}
+
+	/* re-verify the live USB backend parent of the HID proxy on every use */
+	hid_parent = fu_device_get_backend_parent(proxy, &error_local);
+	if (hid_parent == NULL) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "HID proxy topology cannot be resolved: %s",
+			    error_local->message);
+		return FALSE;
+	}
+	hub_phys = fu_device_get_physical_id(FU_DEVICE(self));
+	parent_phys = fu_device_get_physical_id(hid_parent);
+	if (hub_phys == NULL || hub_phys[0] == '\0' || parent_phys == NULL ||
+	    parent_phys[0] == '\0') {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_INVALID_DATA,
+				    "HID proxy parent physical ID cannot be verified");
+		return FALSE;
+	}
+	if (fu_device_get_vid(hid_parent) != fu_device_get_vid(FU_DEVICE(self)) ||
+	    fu_device_get_pid(hid_parent) != fu_device_get_pid(FU_DEVICE(self)) ||
+	    g_strcmp0(parent_phys, hub_phys) != 0) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_INVALID_DATA,
+			    "HID proxy parent (%04x:%04x %s) does not match hub (%04x:%04x %s)",
+			    fu_device_get_vid(hid_parent),
+			    fu_device_get_pid(hid_parent),
+			    parent_phys,
+			    fu_device_get_vid(FU_DEVICE(self)),
+			    fu_device_get_pid(FU_DEVICE(self)),
+			    hub_phys);
+		return FALSE;
+	}
+	return TRUE;
+}
+
 static gboolean
 fu_genesys_usbhub_device_ensure_update_gate(FuGenesysUsbhubDevice *self, GError **error)
 {
 	if (fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_PROXY_REQUIRED)) {
 		FuDevice *proxy = fu_device_get_proxy(FU_DEVICE(self), NULL);
-		if (proxy == NULL) {
-			g_set_error_literal(error,
-					    FWUPD_ERROR,
-					    FWUPD_ERROR_NOT_SUPPORTED,
-					    "HID proxy is required for this hub");
+		if (!fu_genesys_usbhub_device_verify_hid_proxy(self, proxy, error))
 			return FALSE;
-		}
-		if (fu_device_has_private_flag(proxy, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED)) {
-			g_set_error_literal(error,
-					    FWUPD_ERROR,
-					    FWUPD_ERROR_NOT_FOUND,
-					    "HID proxy is no longer connected");
-			return FALSE;
-		}
 	}
 	return fu_genesys_usbhub_device_ensure_hub_chain(self, error);
 }
@@ -391,6 +462,24 @@ fu_genesys_usbhub_device_ctrl_transfer(FuGenesysUsbhubDevice *self,
 {
 	FuDevice *proxy;
 
+	proxy = fu_device_get_proxy(FU_DEVICE(self), NULL);
+	if (proxy != NULL &&
+	    fu_device_has_private_flag(proxy, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED)) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_FOUND,
+				    "HID proxy is no longer connected");
+		return FALSE;
+	}
+	if (proxy == NULL &&
+	    fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_PROXY_REQUIRED)) {
+		g_set_error_literal(error,
+				    FWUPD_ERROR,
+				    FWUPD_ERROR_NOT_SUPPORTED,
+				    "HID proxy is required for vendor transfers");
+		return FALSE;
+	}
+
 	if (self->ctrl_hook != NULL)
 		return self->ctrl_hook(direction,
 				       request,
@@ -400,7 +489,6 @@ fu_genesys_usbhub_device_ctrl_transfer(FuGenesysUsbhubDevice *self,
 				       self->ctrl_hook_data,
 				       error);
 
-	proxy = fu_device_get_proxy(FU_DEVICE(self), NULL);
 	if (proxy != NULL) {
 		return fu_genesys_hubhid_device_send_report(FU_GENESYS_HUBHID_DEVICE(proxy),
 							    progress,
@@ -413,13 +501,6 @@ fu_genesys_usbhub_device_ctrl_transfer(FuGenesysUsbhubDevice *self,
 							    data,
 							    length,
 							    error);
-	}
-	if (fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_PROXY_REQUIRED)) {
-		g_set_error_literal(error,
-				    FWUPD_ERROR,
-				    FWUPD_ERROR_NOT_SUPPORTED,
-				    "HID proxy is required for vendor transfers");
-		return FALSE;
 	}
 	return fu_usb_device_control_transfer(FU_USB_DEVICE(self),
 					      direction,

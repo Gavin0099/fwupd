@@ -43,6 +43,10 @@ fu_genesys_usbhub_device_check_root_hub(guint16 expected_root_pid,
 					guint16 hub_vid,
 					FuDevice *device,
 					GError **error);
+gboolean
+fu_genesys_usbhub_device_verify_hid_proxy(FuGenesysUsbhubDevice *self,
+					  FuDevice *proxy,
+					  GError **error);
 guint16
 fu_genesys_usbhub_device_get_parent_hub_pid(FuGenesysUsbhubDevice *self);
 void

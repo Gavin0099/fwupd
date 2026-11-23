@@ -6,16 +6,18 @@
 
 #include "config.h"
 
+#include "fu-cfi-device.h"
 #include "fu-context-private.h"
 #include "fu-device-private.h"
 #include "fu-genesys-hubhid-device.h"
 #include "fu-genesys-plugin.h"
 #include "fu-genesys-usbhub-device.h"
+#include "fu-genesys-usbhub-firmware.h"
 #include "fu-plugin-private.h"
 
 /*
- * Test vectors use literal hardware VID/PIDs and version pairs.
- * nocheck:magic-inlines=160
+ * Test vectors use literal hardware VID/PIDs, offsets, and version pairs.
+ * nocheck:magic-inlines=240
  */
 
 static gchar *
@@ -566,6 +568,9 @@ fu_genesys_usbhub_device_p34_plugin_hub_lifecycle_func(void)
 		fu_genesys_test_set_backend_parent(ctx, l2_old, l1_a);
 		fu_genesys_test_set_backend_parent(ctx, l2_new, l1_a);
 		fu_genesys_test_set_backend_parent(ctx, l3, l2_old);
+		fu_device_set_vid(proxy_l3, 0x17EF);
+		fu_device_set_pid(proxy_l3, 0x4C42);
+		fu_genesys_test_set_backend_parent(ctx, proxy_l3, l3);
 		fu_device_set_proxy(l3, proxy_l3);
 		fu_genesys_usbhub_device_set_ctrl_hook(FU_GENESYS_USBHUB_DEVICE(l3),
 						       fu_genesys_test_isp_spy_cb,
@@ -732,6 +737,259 @@ fu_genesys_usbhub_device_p34_dual_bank_safety_func(void)
 								 0x8626,
 								 &error));
 	g_assert_no_error(error);
+
+	/* GL3525 refuses when the running other bank failed checksum (INVALID + running) */
+	g_assert_false(
+	    fu_genesys_usbhub_device_check_update_bank(TRUE,
+						       TRUE,
+						       TRUE,
+						       FU_GENESYS_USBHUB_BANK_STATE_INVALID,
+						       FU_GENESYS_USBHUB_BANK_STATE_VALID,
+						       0x0000,
+						       0x8624,
+						       TRUE,
+						       0x8625,
+						       &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+	g_clear_error(&error);
+
+	/* GL3525 allows when the non-running other bank is INVALID */
+	g_assert_true(
+	    fu_genesys_usbhub_device_check_update_bank(TRUE,
+						       TRUE,
+						       TRUE,
+						       FU_GENESYS_USBHUB_BANK_STATE_INVALID,
+						       FU_GENESYS_USBHUB_BANK_STATE_VALID,
+						       0x0000,
+						       0x8624,
+						       FALSE,
+						       0x8625,
+						       &error));
+	g_assert_no_error(error);
+
+	/* GL3523 also refuses UNKNOWN bank state */
+	g_assert_false(
+	    fu_genesys_usbhub_device_check_update_bank(TRUE,
+						       FALSE,
+						       FALSE,
+						       FU_GENESYS_USBHUB_BANK_STATE_VALID,
+						       FU_GENESYS_USBHUB_BANK_STATE_UNKNOWN,
+						       0x8716,
+						       0x0000,
+						       FALSE,
+						       0x8717,
+						       &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+	g_clear_error(&error);
+}
+
+/* S5-R1: runtime HID proxy verification (VID/PID, live backend parent physical ID, disconnect,
+ * ctrl_transfer UNCONNECTED fail-closed, and replug rebinding) */
+static void
+fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func(void)
+{
+	g_autoptr(FuContext) ctx = fu_genesys_test_context_new();
+	g_autoptr(FuDevice) hub = fu_genesys_test_hub_new(ctx, "USB\\VID_17EF&PID_1121", 0x1121);
+	g_autoptr(FuDevice) other_hub = fu_genesys_test_parent_new(0x17EF, 0x1121);
+	g_autoptr(FuDevice) proxy_ok = g_object_new(FU_TYPE_GENESYS_HUBHID_DEVICE, NULL);
+	g_autoptr(FuDevice) proxy_wrong_pid = g_object_new(FU_TYPE_GENESYS_HUBHID_DEVICE, NULL);
+	g_autoptr(FuDevice) proxy_replugged = g_object_new(FU_TYPE_GENESYS_HUBHID_DEVICE, NULL);
+	FuDeviceClass *klass = FU_DEVICE_GET_CLASS(hub);
+	FuGenesysTestIspSpy spy = {0};
+	g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+	g_autoptr(GError) error = NULL;
+
+	fu_device_set_physical_id(hub, "1-4");
+	fu_device_set_physical_id(other_hub, "1-5");
+	fu_device_set_vid(proxy_ok, 0x17EF);
+	fu_device_set_pid(proxy_ok, 0xF00F);
+	fu_device_set_vid(proxy_wrong_pid, 0x17EF);
+	fu_device_set_pid(proxy_wrong_pid, 0x4C42);
+	fu_device_set_vid(proxy_replugged, 0x17EF);
+	fu_device_set_pid(proxy_replugged, 0xF00F);
+	fu_genesys_usbhub_device_set_ctrl_hook(FU_GENESYS_USBHUB_DEVICE(hub),
+					       fu_genesys_test_isp_spy_cb,
+					       &spy);
+
+	/* matching VID/PID and live backend parent physical ID passes */
+	fu_genesys_test_set_backend_parent(ctx, proxy_ok, hub);
+	fu_device_set_proxy(hub, proxy_ok);
+	g_assert_true(fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								proxy_ok,
+								&error));
+	g_assert_no_error(error);
+
+	/* wrong HID proxy PID (4C42 on L1 expecting F00F) refused before ISP_ENTER */
+	fu_genesys_test_set_backend_parent(ctx, proxy_wrong_pid, hub);
+	fu_device_set_proxy(hub, proxy_wrong_pid);
+	g_assert_false(klass->detach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "does not match expected"));
+	g_clear_error(&error);
+
+	/* proxy whose backend parent moved to another dock (same VID/PID, different physical ID) */
+	fu_genesys_test_set_backend_parent(ctx, proxy_ok, other_hub);
+	fu_device_set_proxy(hub, proxy_ok);
+	g_assert_false(klass->detach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "HID proxy parent"));
+	g_clear_error(&error);
+
+	/* unresolvable backend parent fails closed */
+	fu_genesys_test_set_backend_parent(ctx, proxy_ok, NULL);
+	g_assert_false(klass->detach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "topology cannot be resolved"));
+	g_clear_error(&error);
+
+	/* disconnected proxy fails closed even in attach() -> ctrl_transfer() (zero transfers) */
+	fu_genesys_test_set_backend_parent(ctx, proxy_ok, hub);
+	fu_device_add_private_flag(proxy_ok, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED);
+	g_assert_false(klass->attach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_FOUND);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "no longer connected"));
+	g_clear_error(&error);
+
+	/* replugged proxy with matching VID/PID and physical parent passes again */
+	fu_genesys_test_set_backend_parent(ctx, proxy_replugged, hub);
+	fu_device_set_proxy(hub, proxy_replugged);
+	g_assert_true(fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
+								proxy_replugged,
+								&error));
+	g_assert_no_error(error);
+
+	g_assert_cmpuint(spy.n_enter, ==, 0);
+	g_assert_cmpuint(spy.n_reset, ==, 0);
+	g_assert_cmpuint(spy.n_other, ==, 0);
+}
+
+static GBytes *
+fu_genesys_test_build_fw_image(gsize static_off,
+			       gsize project_off,
+			       const gchar *ic_type,
+			       const gchar *project_str)
+{
+	const gsize sz = 0x1000;
+	g_autofree guint8 *buf = g_malloc0(sz);
+	guint16 checksum = 0;
+
+	/* code size at 0xFB (0x1000 / 1024 = 4) and XROM magic at 0xFC..0xFF */
+	buf[0xFB] = 0x04;
+	g_assert_true(fu_memcpy_safe(buf, sz, 0xFC, (const guint8 *)"XROM", 4, 0, 4, NULL));
+	/* static tool string: version=BrandProject ('8'=0x38) at +0x00, mask IC type at +0x08 */
+	buf[static_off + 0x00] = '8';
+	g_assert_true(
+	    fu_memcpy_safe(buf, sz, static_off + 0x08, (const guint8 *)ic_type, 6, 0, 6, NULL));
+	/* 15-byte brand project tool string */
+	g_assert_true(
+	    fu_memcpy_safe(buf, sz, project_off, (const guint8 *)project_str, 15, 0, 15, NULL));
+	/* version pair at 0x10E */
+	buf[0x10E] = 0x25;
+	buf[0x10F] = 0x86;
+	/* 16-bit big-endian sum checksum in last 2 bytes */
+	for (gsize i = 0; i < sz - 2; i++)
+		checksum += buf[i];
+	buf[sz - 2] = (checksum >> 8) & 0xFF;
+	buf[sz - 1] = checksum & 0xFF;
+	return g_bytes_new_take(g_steal_pointer(&buf), sz);
+}
+
+/* S5-R2: real FuGenesysUsbhubFirmware parsing of GL3525 (L1) and GL352350 (L2/L3) images
+ * into PROJECT/IC extraction and 3x3 strict compatibility matrix, plus P34 CFI C84012 quirk */
+static void
+fu_genesys_usbhub_device_p34_firmware_project_parse_func(void)
+{
+	struct {
+		gsize static_off;
+		gsize project_off;
+		const gchar *ic_type;
+		const gchar *project;
+	} specs[3] = {
+	    {0x251, 0x2B1, "352510", "LNV_P34WD40_L10"},
+	    {0x221, 0x281, "352350", "LNV_P34WD40_L20"},
+	    {0x221, 0x281, "352350", "LNV_P34WD40_L30"},
+	};
+	g_autoptr(GPtrArray) parsed =
+	    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+
+	for (guint i = 0; i < G_N_ELEMENTS(specs); i++) {
+		g_autoptr(FuFirmware) fw = g_object_new(FU_TYPE_GENESYS_USBHUB_FIRMWARE, NULL);
+		g_autoptr(GBytes) blob = fu_genesys_test_build_fw_image(specs[i].static_off,
+									specs[i].project_off,
+									specs[i].ic_type,
+									specs[i].project);
+		g_autoptr(GBytes) proj = NULL;
+		g_autofree gchar *ic = NULL;
+		g_autoptr(GError) error = NULL;
+		gsize projsz = 0;
+
+		g_assert_true(fu_firmware_parse_bytes(fw,
+						      blob,
+						      0x0,
+						      FU_FIRMWARE_PARSE_FLAG_NO_SEARCH,
+						      &error));
+		g_assert_no_error(error);
+
+		proj = fu_genesys_usbhub_firmware_get_project_bytes(FU_GENESYS_USBHUB_FIRMWARE(fw));
+		ic = fu_genesys_usbhub_firmware_get_mask_project_ic_type(
+		    FU_GENESYS_USBHUB_FIRMWARE(fw));
+		g_assert_nonnull(proj);
+		g_assert_cmpuint(g_bytes_get_size(proj), ==, 15);
+		g_assert_cmpmem(g_bytes_get_data(proj, &projsz), projsz, specs[i].project, 15);
+		g_assert_cmpstr(ic, ==, specs[i].ic_type);
+		g_ptr_array_add(parsed, g_steal_pointer(&fw));
+	}
+
+	/* 3x3 strict compatibility matrix using real parsed firmware objects */
+	for (guint dev_i = 0; dev_i < 3; dev_i++) {
+		g_autoptr(GBytes) dev_proj = g_bytes_new_static(specs[dev_i].project, 15);
+		for (guint fw_i = 0; fw_i < 3; fw_i++) {
+			FuGenesysUsbhubFirmware *fw = g_ptr_array_index(parsed, fw_i);
+			g_autoptr(GBytes) fw_proj =
+			    fu_genesys_usbhub_firmware_get_project_bytes(fw);
+			g_autofree gchar *fw_ic =
+			    fu_genesys_usbhub_firmware_get_mask_project_ic_type(fw);
+			g_autoptr(GError) error = NULL;
+			gboolean ret = fu_genesys_usbhub_device_check_project_compatibility(
+			    TRUE,
+			    dev_proj,
+			    specs[dev_i].ic_type,
+			    fw_proj,
+			    fw_ic,
+			    &error);
+			if (dev_i == fw_i) {
+				g_assert_true(ret);
+				g_assert_no_error(error);
+			} else {
+				g_assert_false(ret);
+				g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_FILE);
+			}
+		}
+	}
+
+	/* verify P34 flash chip C84012 (GD25Q20C) resolves from data/cfi.quirk */
+	{
+		g_autofree gchar *cfi_dir =
+		    g_test_build_filename(G_TEST_DIST, "..", "..", "data", NULL);
+		if (g_file_test(cfi_dir, G_FILE_TEST_IS_DIR)) {
+			g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_CACHE);
+			g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+			g_autoptr(FuDevice) parent_dev = fu_device_new(ctx);
+			g_autoptr(FuCfiDevice) cfi = NULL;
+			g_autoptr(GError) error = NULL;
+
+			fu_context_set_path(ctx, FU_PATH_KIND_DATADIR_QUIRKS, cfi_dir);
+			g_assert_true(
+			    fu_context_load(ctx, progress, FU_CONTEXT_LOAD_FLAG_NONE, &error));
+			g_assert_no_error(error);
+			cfi = fu_cfi_device_new(parent_dev, "C84012");
+			g_assert_true(fu_device_probe(FU_DEVICE(cfi), &error));
+			g_assert_no_error(error);
+			g_assert_cmpuint(fu_cfi_device_get_page_size(cfi), ==, 0x100);
+			g_assert_cmpuint(fu_cfi_device_get_sector_size(cfi), ==, 0x1000);
+			g_assert_cmpuint(fu_cfi_device_get_block_size(cfi), ==, 0x10000);
+		}
+	}
 }
 
 int
@@ -752,5 +1010,9 @@ main(int argc, char **argv)
 			fu_genesys_usbhub_device_p34_strict_project_check_func);
 	g_test_add_func("/fwupd/genesys/p34/dual-bank-safety",
 			fu_genesys_usbhub_device_p34_dual_bank_safety_func);
+	g_test_add_func("/fwupd/genesys/p34/hid-proxy-runtime-verify",
+			fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func);
+	g_test_add_func("/fwupd/genesys/p34/firmware-project-parse",
+			fu_genesys_usbhub_device_p34_firmware_project_parse_func);
 	return g_test_run();
 }
