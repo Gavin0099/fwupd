@@ -168,6 +168,7 @@ typedef struct {
 	guint n_enter;
 	guint n_reset;
 	guint n_other;
+	gboolean allow_reset;
 } FuGenesysTestIspSpy;
 
 static gboolean
@@ -181,12 +182,15 @@ fu_genesys_test_isp_spy_cb(FuUsbDirection direction,
 {
 	FuGenesysTestIspSpy *spy = user_data;
 
-	if (direction == FU_USB_DIRECTION_HOST_TO_DEVICE && value == 0x0001)
+	if (direction == FU_USB_DIRECTION_HOST_TO_DEVICE && value == 0x0001) {
 		spy->n_enter++;
-	else if (direction == FU_USB_DIRECTION_HOST_TO_DEVICE && value == 0x0003)
+	} else if (direction == FU_USB_DIRECTION_HOST_TO_DEVICE && value == 0x0003) {
 		spy->n_reset++;
-	else
+		if (spy->allow_reset)
+			return TRUE;
+	} else {
 		spy->n_other++;
+	}
 	g_set_error_literal(error, FWUPD_ERROR, FWUPD_ERROR_READ, "spy-stop");
 	return FALSE;
 }
@@ -819,10 +823,14 @@ fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func(void)
 								&error));
 	g_assert_no_error(error);
 
-	/* wrong HID proxy PID (4C42 on L1 expecting F00F) refused before ISP_ENTER */
+	/* wrong HID proxy PID (4C42 on L1 expecting F00F) refused in detach() AND attach() */
 	fu_genesys_test_set_backend_parent(ctx, proxy_wrong_pid, hub);
 	fu_device_set_proxy(hub, proxy_wrong_pid);
 	g_assert_false(klass->detach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "does not match expected"));
+	g_clear_error(&error);
+	g_assert_false(klass->attach(hub, progress, &error));
 	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
 	g_assert_nonnull(g_strstr_len(error->message, -1, "does not match expected"));
 	g_clear_error(&error);
@@ -834,15 +842,23 @@ fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func(void)
 	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
 	g_assert_nonnull(g_strstr_len(error->message, -1, "HID proxy parent"));
 	g_clear_error(&error);
+	g_assert_false(klass->attach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "HID proxy parent"));
+	g_clear_error(&error);
 
-	/* unresolvable backend parent fails closed */
+	/* unresolvable backend parent fails closed in both detach() and attach() */
 	fu_genesys_test_set_backend_parent(ctx, proxy_ok, NULL);
 	g_assert_false(klass->detach(hub, progress, &error));
 	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
 	g_assert_nonnull(g_strstr_len(error->message, -1, "topology cannot be resolved"));
 	g_clear_error(&error);
+	g_assert_false(klass->attach(hub, progress, &error));
+	g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_INVALID_DATA);
+	g_assert_nonnull(g_strstr_len(error->message, -1, "topology cannot be resolved"));
+	g_clear_error(&error);
 
-	/* disconnected proxy fails closed even in attach() -> ctrl_transfer() (zero transfers) */
+	/* disconnected proxy fails closed in attach() (zero transfers) */
 	fu_genesys_test_set_backend_parent(ctx, proxy_ok, hub);
 	fu_device_add_private_flag(proxy_ok, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED);
 	g_assert_false(klass->attach(hub, progress, &error));
@@ -850,17 +866,23 @@ fu_genesys_usbhub_device_p34_hid_proxy_runtime_verify_func(void)
 	g_assert_nonnull(g_strstr_len(error->message, -1, "no longer connected"));
 	g_clear_error(&error);
 
-	/* replugged proxy with matching VID/PID and physical parent passes again */
+	/* zero vendor commands sent across all negative cases */
+	g_assert_cmpuint(spy.n_enter, ==, 0);
+	g_assert_cmpuint(spy.n_reset, ==, 0);
+	g_assert_cmpuint(spy.n_other, ==, 0);
+
+	/* replugged proxy with matching VID/PID and physical parent succeeds in attach() */
+	spy.allow_reset = TRUE;
 	fu_genesys_test_set_backend_parent(ctx, proxy_replugged, hub);
 	fu_device_set_proxy(hub, proxy_replugged);
 	g_assert_true(fu_genesys_usbhub_device_verify_hid_proxy(FU_GENESYS_USBHUB_DEVICE(hub),
 								proxy_replugged,
 								&error));
 	g_assert_no_error(error);
-
-	g_assert_cmpuint(spy.n_enter, ==, 0);
-	g_assert_cmpuint(spy.n_reset, ==, 0);
-	g_assert_cmpuint(spy.n_other, ==, 0);
+	g_assert_true(klass->attach(hub, progress, &error));
+	g_assert_no_error(error);
+	g_assert_cmpuint(spy.n_reset, ==, 1);
+	g_assert_true(fu_device_has_flag(hub, FWUPD_DEVICE_FLAG_WAIT_FOR_REPLUG));
 }
 
 static GBytes *
@@ -967,28 +989,30 @@ fu_genesys_usbhub_device_p34_firmware_project_parse_func(void)
 		}
 	}
 
-	/* verify P34 flash chip C84012 (GD25Q20C) resolves from data/cfi.quirk */
+	/* verify P34 flash chip C84012 (GD25Q20C) resolves from cfi.quirk; never silently skip */
 	{
-		g_autofree gchar *cfi_dir =
+		g_autofree gchar *installed_cfi =
+		    g_test_build_filename(G_TEST_DIST, "tests", "cfi", NULL);
+		g_autofree gchar *source_cfi =
 		    g_test_build_filename(G_TEST_DIST, "..", "..", "data", NULL);
-		if (g_file_test(cfi_dir, G_FILE_TEST_IS_DIR)) {
-			g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_CACHE);
-			g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
-			g_autoptr(FuDevice) parent_dev = fu_device_new(ctx);
-			g_autoptr(FuCfiDevice) cfi = NULL;
-			g_autoptr(GError) error = NULL;
+		const gchar *cfi_dir =
+		    g_file_test(installed_cfi, G_FILE_TEST_IS_DIR) ? installed_cfi : source_cfi;
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_CACHE);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(FuDevice) parent_dev = fu_device_new(ctx);
+		g_autoptr(FuCfiDevice) cfi = NULL;
+		g_autoptr(GError) error = NULL;
 
-			fu_context_set_path(ctx, FU_PATH_KIND_DATADIR_QUIRKS, cfi_dir);
-			g_assert_true(
-			    fu_context_load(ctx, progress, FU_CONTEXT_LOAD_FLAG_NONE, &error));
-			g_assert_no_error(error);
-			cfi = fu_cfi_device_new(parent_dev, "C84012");
-			g_assert_true(fu_device_probe(FU_DEVICE(cfi), &error));
-			g_assert_no_error(error);
-			g_assert_cmpuint(fu_cfi_device_get_page_size(cfi), ==, 0x100);
-			g_assert_cmpuint(fu_cfi_device_get_sector_size(cfi), ==, 0x1000);
-			g_assert_cmpuint(fu_cfi_device_get_block_size(cfi), ==, 0x10000);
-		}
+		g_assert_true(g_file_test(cfi_dir, G_FILE_TEST_IS_DIR));
+		fu_context_set_path(ctx, FU_PATH_KIND_DATADIR_QUIRKS, cfi_dir);
+		g_assert_true(fu_context_load(ctx, progress, FU_CONTEXT_LOAD_FLAG_NONE, &error));
+		g_assert_no_error(error);
+		cfi = fu_cfi_device_new(parent_dev, "C84012");
+		g_assert_true(fu_device_probe(FU_DEVICE(cfi), &error));
+		g_assert_no_error(error);
+		g_assert_cmpuint(fu_cfi_device_get_page_size(cfi), ==, 0x100);
+		g_assert_cmpuint(fu_cfi_device_get_sector_size(cfi), ==, 0x1000);
+		g_assert_cmpuint(fu_cfi_device_get_block_size(cfi), ==, 0x10000);
 	}
 }
 

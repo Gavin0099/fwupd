@@ -3930,9 +3930,8 @@ fu_test_p34_hub_device_write_firmware(FuDevice *device,
 	}
 	if (self->target_version != NULL)
 		fu_device_set_version(device, self->target_version);
-	if (self->remove_after_write != NULL)
-		fu_device_add_private_flag(self->remove_after_write,
-					   FU_DEVICE_PRIVATE_FLAG_UNCONNECTED);
+	if (self->remove_plugin != NULL && self->remove_after_write != NULL)
+		fu_plugin_remove_device(self->remove_plugin, self->remove_after_write);
 	return TRUE;
 }
 
@@ -4068,12 +4067,12 @@ fu_engine_p34_composite_setup(FuEngine *engine,
 	g_autoptr(XbSilo) silo_empty = xb_silo_new();
 
 	fu_engine_set_silo(engine, silo_empty);
+	/* register plugin BEFORE fu_engine_load() so device-removed is wired to FuEngine */
+	fu_plugin_set_name(plugin, "p34sim");
+	fu_engine_add_plugin(engine, plugin);
 	ret = fu_engine_load(engine, FU_ENGINE_LOAD_FLAG_NO_CACHE, progress, &error);
 	g_assert_no_error(error);
 	g_assert_true(ret);
-
-	fu_plugin_set_name(plugin, "p34sim");
-	fu_engine_add_plugin(engine, plugin);
 	if (out_plugin != NULL)
 		*out_plugin = plugin;
 
@@ -4164,15 +4163,21 @@ fu_engine_p34_composite_cab_func(void)
 	};
 	g_autoptr(FuCabinet) cabinet = fu_engine_p34_build_canonical_cab();
 
-	/* 1. Model A: real 3-component CAB installs strictly in L3 -> L2 -> L1 order */
+	/* 1. Model A: build releases through FuEngineInstaller (positive control for model B)
+	 * and verify strict L3 -> L2 -> L1 install order and post-update versions */
 	{
 		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
 		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
 		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuEngineInstaller) installer = fu_engine_installer_new(engine);
+		g_autoptr(GBytes) cab_blob = fu_engine_p34_build_canonical_cab_bytes();
+		g_autoptr(FuInputStream) cab_stream =
+		    FWUPD_INPUT_STREAM(fwupd_memory_input_stream_new_from_bytes(cab_blob));
 		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
 		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
 		g_autoptr(GPtrArray) releases =
 		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		GPtrArray *installer_releases = NULL;
 		FuTestP34HubDevice *hubs[3] = {NULL};
 		g_autoptr(GError) error = NULL;
 		gboolean ret;
@@ -4191,9 +4196,21 @@ fu_engine_p34_composite_cab_func(void)
 				==,
 				fu_device_get_id(FU_DEVICE(hubs[0])));
 
+		/* positive control: FuEngineInstaller builds all 3 releases on model A */
+		fu_engine_installer_set_request(installer, request);
+		ret = fu_engine_installer_build(installer,
+						FWUPD_DEVICE_ID_ANY,
+						cab_stream,
+						FWUPD_INSTALL_FLAG_NONE,
+						&error);
+		g_assert_no_error(error);
+		g_assert_true(ret);
+		installer_releases = fu_engine_installer_get_releases(installer);
+		g_assert_cmpuint(installer_releases->len, ==, 3);
+
 		ret = fu_engine_install_releases(engine,
 						 request,
-						 releases,
+						 installer_releases,
 						 progress,
 						 FWUPD_INSTALL_FLAG_NONE,
 						 &error);
@@ -4239,7 +4256,8 @@ fu_engine_p34_composite_cab_func(void)
 					      releases);
 		g_assert_cmpuint(releases->len, ==, 0);
 
-		/* drive the full CAB installer entry point on model B */
+		/* drive the full CAB installer entry point on model B: must fail specifically
+		 * because the model-A L1 fingerprint GUID is absent on parent device */
 		fu_engine_installer_set_request(installer, request);
 		g_assert_false(fu_engine_installer_build(installer,
 							 FWUPD_DEVICE_ID_ANY,
@@ -4247,6 +4265,9 @@ fu_engine_p34_composite_cab_func(void)
 							 FWUPD_INSTALL_FLAG_NONE,
 							 &error));
 		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+		g_assert_nonnull(
+		    g_strstr_len(error->message, -1, "008d820f-ffc9-502d-8f25-f9313d04e8de"));
+		g_assert_cmpuint(fu_engine_installer_get_releases(installer)->len, ==, 0);
 		g_assert_cmpuint(write_log->len, ==, 0);
 
 		for (guint i = 0; i < 3; i++)
@@ -4475,7 +4496,12 @@ fu_engine_p34_composite_cab_failures_func(void)
 							  progress,
 							  FWUPD_INSTALL_FLAG_NONE,
 							  &error));
-		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_FOUND);
+		g_clear_error(&error);
+		/* verify L2 was genuinely removed from FuEngine's device list */
+		g_assert_null(
+		    fu_engine_get_device(engine, fu_device_get_id(FU_DEVICE(hubs[1])), &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_FOUND);
 		g_assert_cmpuint(write_log->len, ==, 1);
 		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
 		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[2])), ==, "88.17");

@@ -1751,6 +1751,13 @@ fu_genesys_usbhub_device_attach(FuDevice *device, FuProgress *progress, GError *
 {
 	FuGenesysUsbhubDevice *self = FU_GENESYS_USBHUB_DEVICE(device);
 
+	/* verify HID proxy identity before sending vendor reset, without blocking on upstream
+	 * hub-chain topology checks needed only for update entries */
+	if (fu_device_has_private_flag(device, FU_GENESYS_USBHUB_FLAG_PROXY_REQUIRED)) {
+		FuDevice *proxy = fu_device_get_proxy(device, NULL);
+		if (!fu_genesys_usbhub_device_verify_hid_proxy(self, proxy, error))
+			return FALSE;
+	}
 	if (!fu_genesys_usbhub_device_reset(self, error))
 		return FALSE;
 
