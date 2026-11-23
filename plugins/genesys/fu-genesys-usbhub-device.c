@@ -1895,7 +1895,7 @@ fu_genesys_usbhub_device_probe(FuDevice *device, GError **error)
 	if (fu_device_has_private_flag(FU_DEVICE(self), FU_GENESYS_USBHUB_FLAG_PROXY_REQUIRED)) {
 		if (!fu_device_retry_full(FU_DEVICE(self),
 					  fu_genesys_usbhub_device_ensure_hid_proxy_cb,
-					  5,
+					  50,
 					  100,
 					  NULL,
 					  error)) {
