@@ -13,6 +13,7 @@
 #include "fu-context-private.h"
 #include "fu-device-private.h"
 #include "fu-engine-helper.h"
+#include "fu-engine-installer.h"
 #include "fu-engine-requirements.h"
 #include "fu-engine.h"
 #include "fu-history.h"
@@ -3894,6 +3895,8 @@ struct _FuTestP34HubDevice {
 	FuDevice parent_instance;
 	GPtrArray *write_log; /* (nullable) owned by test */
 	const gchar *target_version;
+	FuPlugin *remove_plugin;      /* (nullable) owned by engine */
+	FuDevice *remove_after_write; /* (nullable) device removed mid-composite */
 	gboolean fail_write;
 	gboolean simulate_replug_timeout;
 	gboolean fail_reload;
@@ -3927,6 +3930,26 @@ fu_test_p34_hub_device_write_firmware(FuDevice *device,
 	}
 	if (self->target_version != NULL)
 		fu_device_set_version(device, self->target_version);
+	if (self->remove_after_write != NULL)
+		fu_device_add_private_flag(self->remove_after_write,
+					   FU_DEVICE_PRIVATE_FLAG_UNCONNECTED);
+	return TRUE;
+}
+
+static gboolean
+fu_test_p34_hub_device_prepare(FuDevice *device,
+			       FuProgress *progress,
+			       FwupdInstallFlags flags,
+			       GError **error)
+{
+	if (fu_device_has_private_flag(device, FU_DEVICE_PRIVATE_FLAG_UNCONNECTED)) {
+		g_set_error(error,
+			    FWUPD_ERROR,
+			    FWUPD_ERROR_NOT_FOUND,
+			    "device %s disappeared mid-update",
+			    fu_device_get_logical_id(device));
+		return FALSE;
+	}
 	return TRUE;
 }
 
@@ -3950,6 +3973,7 @@ static void
 fu_test_p34_hub_device_class_init(FuTestP34HubDeviceClass *klass)
 {
 	FuDeviceClass *device_class = FU_DEVICE_CLASS(klass);
+	device_class->prepare = fu_test_p34_hub_device_prepare;
 	device_class->write_firmware = fu_test_p34_hub_device_write_firmware;
 	device_class->reload = fu_test_p34_hub_device_reload;
 }
@@ -3978,18 +4002,14 @@ fu_engine_p34_load_fixture(const gchar *filename)
 	return g_steal_pointer(&xml);
 }
 
-static FuCabinet *
-fu_engine_p34_build_canonical_cab(void)
+static GBytes *
+fu_engine_p34_build_canonical_cab_bytes(void)
 {
 	g_autofree gchar *xml_l1 = fu_engine_p34_load_fixture("l1.metainfo.xml");
 	g_autofree gchar *xml_l2 = fu_engine_p34_load_fixture("l2.metainfo.xml");
 	g_autofree gchar *xml_l3 = fu_engine_p34_load_fixture("l3.metainfo.xml");
-	g_autoptr(FuCabinet) cabinet = fu_cabinet_new();
-	g_autoptr(GBytes) blob = NULL;
-	g_autoptr(GError) error = NULL;
-	gboolean ret;
 
-	blob = fu_test_build_cab(FALSE,
+	return fu_test_build_cab(FALSE,
 				 "l1.metainfo.xml",
 				 xml_l1,
 				 "l2.metainfo.xml",
@@ -4003,6 +4023,16 @@ fu_engine_p34_build_canonical_cab(void)
 				 "l3.bin",
 				 "p34-l3-payload",
 				 NULL);
+}
+
+static FuCabinet *
+fu_engine_p34_build_canonical_cab(void)
+{
+	g_autoptr(FuCabinet) cabinet = fu_cabinet_new();
+	g_autoptr(GBytes) blob = fu_engine_p34_build_canonical_cab_bytes();
+	g_autoptr(GError) error = NULL;
+	gboolean ret;
+
 	ret = fu_firmware_parse_bytes(FU_FIRMWARE(cabinet),
 				      blob,
 				      0x0,
@@ -4021,6 +4051,7 @@ fu_engine_p34_composite_setup(FuEngine *engine,
 			      gboolean include_l2,
 			      GPtrArray *write_log,
 			      FuTestP34HubDevice *out_hubs[3],
+			      FuPlugin **out_plugin,
 			      GPtrArray *releases)
 {
 	gboolean ret;
@@ -4043,6 +4074,8 @@ fu_engine_p34_composite_setup(FuEngine *engine,
 
 	fu_plugin_set_name(plugin, "p34sim");
 	fu_engine_add_plugin(engine, plugin);
+	if (out_plugin != NULL)
+		*out_plugin = plugin;
 
 	for (guint i = 0; i < 3; i++) {
 		FuTestP34HubDevice *hub;
@@ -4151,6 +4184,7 @@ fu_engine_p34_composite_cab_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		g_assert_cmpuint(releases->len, ==, 3);
 		g_assert_cmpstr(fu_device_get_composite_id(FU_DEVICE(hubs[2])),
@@ -4178,15 +4212,21 @@ fu_engine_p34_composite_cab_func(void)
 			g_object_unref(hubs[i]);
 	}
 
-	/* 2. Model B (L1 = 1151): entire Model-A composite CAB is rejected with zero writes */
+	/* 2. Model B (L1 = 1151): entire Model-A composite CAB is rejected at matching AND
+	 * through the full FuEngineInstaller CAB install entry point, with zero writes */
 	{
 		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
 		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
 		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuEngineInstaller) installer = fu_engine_installer_new(engine);
+		g_autoptr(GBytes) cab_blob = fu_engine_p34_build_canonical_cab_bytes();
+		g_autoptr(FuInputStream) cab_stream =
+		    FWUPD_INPUT_STREAM(fwupd_memory_input_stream_new_from_bytes(cab_blob));
 		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
 		g_autoptr(GPtrArray) releases =
 		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
 		FuTestP34HubDevice *hubs[3] = {NULL};
+		g_autoptr(GError) error = NULL;
 
 		fu_engine_p34_composite_setup(engine,
 					      request,
@@ -4195,8 +4235,18 @@ fu_engine_p34_composite_cab_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		g_assert_cmpuint(releases->len, ==, 0);
+
+		/* drive the full CAB installer entry point on model B */
+		fu_engine_installer_set_request(installer, request);
+		g_assert_false(fu_engine_installer_build(installer,
+							 FWUPD_DEVICE_ID_ANY,
+							 cab_stream,
+							 FWUPD_INSTALL_FLAG_NONE,
+							 &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
 		g_assert_cmpuint(write_log->len, ==, 0);
 
 		for (guint i = 0; i < 3; i++)
@@ -4233,6 +4283,7 @@ fu_engine_p34_composite_cab_failures_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		hubs[2]->fail_write = TRUE;
 		g_assert_false(fu_engine_install_releases(engine,
@@ -4269,6 +4320,7 @@ fu_engine_p34_composite_cab_failures_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		hubs[1]->fail_write = TRUE;
 		g_assert_false(fu_engine_install_releases(engine,
@@ -4305,6 +4357,7 @@ fu_engine_p34_composite_cab_failures_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		hubs[2]->simulate_replug_timeout = TRUE;
 		g_assert_false(fu_engine_install_releases(engine,
@@ -4341,6 +4394,7 @@ fu_engine_p34_composite_cab_failures_func(void)
 					      TRUE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		hubs[2]->fail_reload = TRUE;
 		g_assert_false(fu_engine_install_releases(engine,
@@ -4375,6 +4429,7 @@ fu_engine_p34_composite_cab_failures_func(void)
 					      FALSE,
 					      write_log,
 					      hubs,
+					      NULL,
 					      releases);
 		/* only L1 matches; L3 is rejected because L2 parent is missing */
 		g_assert_cmpuint(releases->len, ==, 1);
@@ -4385,6 +4440,49 @@ fu_engine_p34_composite_cab_failures_func(void)
 		g_assert_cmpuint(write_log->len, ==, 0);
 		g_object_unref(hubs[0]);
 		g_object_unref(hubs[2]);
+	}
+
+	/* 6. Mid-update L2 disappearance: L3 succeeds, then L2 vanishes before its turn;
+	 * engine must detect L2 is gone and abort without ever writing L1 */
+	{
+		g_autoptr(FuContext) ctx = fu_context_new_full(FU_CONTEXT_FLAG_NO_QUIRKS);
+		g_autoptr(FuEngine) engine = fu_engine_new(ctx);
+		g_autoptr(FuEngineRequest) request = fu_engine_request_new(NULL);
+		g_autoptr(FuProgress) progress = fu_progress_new(G_STRLOC);
+		g_autoptr(GPtrArray) write_log = g_ptr_array_new_with_free_func(g_free);
+		g_autoptr(GPtrArray) releases =
+		    g_ptr_array_new_with_free_func((GDestroyNotify)g_object_unref);
+		FuTestP34HubDevice *hubs[3] = {NULL};
+		FuPlugin *plugin = NULL;
+		g_autoptr(GError) error = NULL;
+
+		fu_engine_p34_composite_setup(engine,
+					      request,
+					      cabinet,
+					      model_a,
+					      TRUE,
+					      write_log,
+					      hubs,
+					      &plugin,
+					      releases);
+		g_assert_cmpuint(releases->len, ==, 3);
+		hubs[2]->remove_plugin = plugin;
+		hubs[2]->remove_after_write = FU_DEVICE(hubs[1]);
+
+		g_assert_false(fu_engine_install_releases(engine,
+							  request,
+							  releases,
+							  progress,
+							  FWUPD_INSTALL_FLAG_NONE,
+							  &error));
+		g_assert_error(error, FWUPD_ERROR, FWUPD_ERROR_NOT_SUPPORTED);
+		g_assert_cmpuint(write_log->len, ==, 1);
+		g_assert_cmpstr(g_ptr_array_index(write_log, 0), ==, "l3");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[2])), ==, "88.17");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[1])), ==, "87.10");
+		g_assert_cmpstr(fu_device_get_version(FU_DEVICE(hubs[0])), ==, "86.20");
+		for (guint i = 0; i < 3; i++)
+			g_object_unref(hubs[i]);
 	}
 }
 
